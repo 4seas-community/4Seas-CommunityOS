@@ -1,7 +1,7 @@
-# 04 · 集成架构
+# 04 · 集成架构(v2)
 
-> Luma 同步、Social Layer 同步、Telegram Bot & Mini App、Agent API(REST + MCP)、通知与邮件基础设施。
-> 原则:核心数据在 CommunityOS;外部平台是分发镜像与回流入口。
+> v2 更新:Luma/Social Layer 均为**单向发布**(不回写);Social Layer 基于实测 API 设计并附 computer-use 兜底;Telegram 通知经 **4seasbot** 拉取式集成;Mini App 二期。
+> 原则:核心数据在 CommunityOS;外部平台是分发镜像;身份/积分/签到归 CAS。
 
 ---
 
@@ -9,40 +9,41 @@
 
     +-----------------------------+
     |      4Seas CommunityOS      |
-    |  (主数据源: Place/Event/People)|
-    +--------------+--------------+
-                   |
-     +-------------+-------------+-------------+
-     |             |             |             |
-     v             v             v             v
-  +------+     +------+     +--------+     +---------+
-  | Luma |     |Social|     |Telegram|    |  Agent  |
-  | 镜像 |     |Layer |     |Bot/App |    | API/MCP |
-  +------+     +------+     +--------+     +---------+
-     ^             ^             ^
-     |             |             |
-  出站发布      出站发布      出站通知
-  入站 webhook  (API/iCal)   入站 initData/命令
+    |  (主数据源: Place/Event/Booking)
+    +------+---------------+------+
+           |               |
+     出站发布          出站 feed(拉取)
+           |               |
+     +-----+-----+    +----+-----+
+     |           |    | 4seasbot |----> Telegram 用户/群/频道
+     v           v    +----------+
+  +------+   +-------+
+  | Luma |   | Social|
+  |(单向)|   | Layer |
+  +------+   |(单向) |
+             +-------+
+
+    +-----------------------------+
+    |  CAS(账户/积分镜像/签到/NFT)  | <—— 接口消费(auth/points/checkin)
+    +-----------------------------+
 
 数据流向原则:
 
-- **出站(发布)**:我方活动状态变为 published 时,按集成配置异步推送到各平台。
-- **入站(回流)**:仅限明确契约的数据(Luma 的报名/取消/退款 webhook;Telegram 的 initData 与命令)。外部对活动内容的修改不回写。
-- **对账**:每日任务比对 SyncRecord 与外部平台状态,差异进入人工队列。
+- **出站发布**:活动 published 时异步推送到 Luma / Social Layer(单向,只写不回读报名)。
+- **出站 feed**:4seasbot 定时拉取本系统的活动数据与通知 outbox,投递到 Telegram。
+- **入站(唯一)**:CAS 的 webhook(账户验证状态变更、积分变更镜像);外部平台的内容修改**不回写**。
+- **对账**:每日任务比对外部平台上的活动状态(是否存在/已取消),差异进人工队列。
 
 ---
 
-## 2. Luma 集成(双向)
+## 2. Luma 集成(单向发布)
 
 ### 2.1 能力与约束(来自官方文档)
 
-- 认证:请求头 x-luma-api-key;Calendar key 限流 200 次/分钟,Organization key 500 次/分钟;超限 429 需退避重试。
-- 取消活动两步流程:先 POST /events/cancel/request 获取 cancellation_token(15 分钟有效),再 POST /events/cancel;不可逆,自动通知全部嘉宾并退款。
-- 封面图:需先 POST /images/create-upload-url 上传至 images.lumacdn.com,再用返回的 file_url。
-- 日历投稿-审批:calendar events add / approve / reject(可作为我们"活动审核"流程的映射)。
-- 嘉宾:add / update-status(approved/declined/pending_approval/waitlist,可退款)/ send-invites(邮件+短信)。
-- Webhooks:event.created / updated / canceled;guest.registered / updated / refunded;ticket.registered;calendar.event.added / submitted;calendar.person.subscribed / unsubscribed。
-- 前置条件:Luma Plus 订阅(公开 API 门槛)。
+- 认证:x-luma-api-key 请求头;Calendar key 限流 200 次/分钟,Organization key 500 次/分钟;超限 429 需退避。
+- 取消两步流程:先取 cancellation_token(15 分钟有效)再执行;不可逆,自动通知全部嘉宾。
+- 封面图:须先上传 Luma CDN(images/create-upload-url)再引用。
+- 前置条件:Luma Plus 订阅。
 
 ### 2.2 字段映射(我方 -> Luma create/update event)
 
@@ -51,215 +52,165 @@
 | title | name | |
 | start_at / end_at | start_at / end_at | ISO 8601 |
 | timezone | timezone | 必填 |
-| description(markdown) | description_md | |
+| description | description_md | Markdown |
 | banner_url | cover_url | 必须先上传 Luma CDN |
-| event_type + venue_id | geo_address_json | {type: "manual", address} 或 {type: "lookup", query};线上活动用 meeting_url |
+| event_type + venue_id | geo_address_json | manual / lookup / google place_id;线上用 meeting_url |
 | visibility | visibility | public / private / members |
 | max_capacity | max_capacity | |
-| waitlist_enabled | waitlist_status | enabled / disabled |
-| approval_required | registration_open + 审批流 | 站内审批由我们控制;Luma 侧报名默认 approved |
+| waitlist_enabled | waitlist_status | |
 | registration_questions | registration_questions | |
-| tags | 日历 event tags | 需先 ensure tag 存在 |
+| tags | 日历 event tags | 先确保 tag 存在 |
 | program | 日历 | 一个 Program 映射一个 Luma calendar |
-| is_paid / price_info | ticket_types | 付费需日历绑定 Stripe;免费则默认 Standard 票 |
-| entry_requirements | description_md 追加段落 | Luma 无专用字段 |
-| transport_info | description_md 追加段落 或 geo address description | |
-| host_id / co_host_ids | hosts(add) | manager / check-in 两级 |
+| is_paid / price_info | ticket_types | 付费需日历绑定 Stripe |
+| entry_requirements / transport_info | description_md 追加固定小节 | Luma 无专用字段 |
+| host / co_hosts | hosts | manager / check-in 两级 |
 
-映射规则:
+### 2.3 同步流程(单向)
 
-- 所有 Luma 不覆盖的字段(交通路线、入场要求、场地规则)统一追加到 description_md 末尾的固定小节,保证对外信息完整。
-- 发布即生成 Luma 侧唯一 slug 存入 SyncRecord;我方详情页同时提供跳转 Luma 报名页或内嵌报名(二选一由活动配置)。
+出站(活动 published 或更新时):
 
-### 2.3 同步流程
+1. banner 为本地图片则先上传 Luma CDN 换取 cover_url。
+2. POST /events/create(已有映射则 update)。
+3. 写 SyncRecord:{platform: "luma", external_id, slug, status, synced_at}。
+4. 失败:指数退避(客户端自限 150/min 留余量),5 次后 dead_letter,通知 Admin。
 
-出站(活动发布时):
+取消:两步 token 流程;同步标记 canceled。
 
-1. 若 banner 为本地图片:调用 images/create-upload-url 上传,换取 cover_url。
-2. POST /events/create(或已有映射则 update)。
-3. 写入 SyncRecord: {platform: "luma", external_id, slug, status: synced, synced_at}。
-4. 失败:指数退避重试(尊重 200/min 限流),5 次后进入 dead_letter,通知 Admin。
-
-入站(webhook):
-
-- guest.registered -> 在我方创建/更新 Registration(source=luma_webhook);若该成员未注册,自动创建 unverified 账户并发送验证邮件(转化漏斗)。
-- guest.updated / guest.refunded -> 同步状态。
-- event.canceled(外部取消)-> 标记差异,进入对账队列(不自动取消我方活动,防止误删;由管理员确认)。
-
-取消我方活动时:
-
-1. 读 SyncRecord 取 luma event id。
-2. POST /events/cancel/request 取 token -> POST /events/cancel(should_refund 按活动付费类型)。
-3. 更新 SyncRecord 为 canceled;通知报名者(以我方通知为主,Luma 也会自动发)。
+对账(每日):拉取 Luma 侧活动列表,比对存在性与状态;外部人工修改产生差异时**以我方为准重新覆盖或人工确认**,不自动回写我方。
 
 ### 2.4 风险与对策
 
 | 风险 | 对策 |
 | --- | --- |
-| Luma Plus 未订阅/过期 | 功能开关降级:仍生成活动页,仅不同步;后台提示订阅状态 |
-| 限流 429 | 队列 + 令牌桶限流器(客户端自限 150/min,留余量) |
-| 封面上传失败 | 使用场地/社区默认封面兜底,记录 warning |
-| 双端信息漂移 | 每日对账任务;我方为权威源,差异以"重新推送覆盖"或"人工确认"处理 |
-| 取消误操作 | 两步确认 + 审计日志 |
+| Luma Plus 未订阅/失效 | 功能开关降级:仅站内发布;后台提示订阅状态 |
+| 限流 429 | 队列 + 客户端令牌桶自限 |
+| 封面上传失败 | 场地/社区默认封面兜底 |
+| 双端信息漂移 | 每日对账;我方为权威源 |
+| 取消误操作 | 两步确认 + 审计 |
 
 ---
 
-## 3. Social Layer 集成
+## 3. Social Layer 集成(单向发布)
 
-### 3.1 现状
+### 3.1 API 实况(2026-09 实测调研)
 
-4Seas Community 当前在 Social Layer(app.sola.day)发布活动,场地命名已采用"建筑-楼层-空间"结构,与我们的模型天然兼容。Social Layer 定位为模块化社会基础设施,提供身份/徽章、日程、RSVP;其协议开源,但产品化 API 的开放程度需验证。
+Social Layer 前端开源(sociallayer-im/seastar-app),其中 packages/sola-sdk 揭示了完整的 **api.sola.day/api/v1** REST 契约(未公开文档,但已实测可用;4Seas-bot 已在用其只读端点)。要点:
 
-### 3.2 方案
+- **读**:GET /events?group_id=4seas&collection=upcoming(结构化 JSON);GET /groups/4seas/calendar.ics(iCal,REFRESH-INTERVAL 1h)
+- **写(需 JWT)**:POST /events(创建,roles/tickets 可内联一次性提交);PATCH /events/:id;DELETE /events/:id(软取消,参会者收到 CANCEL .ics);POST /events/:id/approve
+- **报名**:POST /events/:id/participants(报名);POST /events/:id/participants/check_in(**签到**);approve / reject 参会者
+- **场地**:POST /venues / PATCH / DELETE / POST /venues/:id/availability;GET /venues/:id/conflict(冲突检测)
+- **认证**:邮箱一次性验证码(request_code/verify_code → JWT)、手机验证码、Google OAuth、SIWE 钱包登录
 
-- 方案 A(首选,若开放可写 API):与 Luma 相同的镜像模式——活动发布时同步到 4Seas 的 Social Layer group;若提供 webhook 则回流报名。
-- 方案 B(过渡,无公开写 API):
-  - 我方提供标准 iCal 订阅地址(按 Program/场地/标签过滤),Social Layer 侧如有日历订阅能力可直接消费;
-  - 我方活动详情页提供"添加到 Social Layer"深链;
-  - 保留 sola.day 页面作为对外入口之一,逐步迁移。
-- 方案 C(长期):以徽章/参与凭证形式对接——成员参与记录导出为可验证凭证(Social Layer 徽章、POAP),强化"可携带身份"。
+### 3.2 方案:服务账号 + API(首选)
 
-**决策点**:需要先确认 sola.day 是否有开放 API(见 05-roadmap.md 开放问题 Q1)。无论哪种方案,SyncRecord 结构保持一致,后端可平滑切换。
+- 使用 4Seas group manager 账号(邮箱验证码登录获取 JWT;或 OAuth)。服务端安全存储 refresh 机制。
+- 活动 published 时 POST /events 创建,body 带 group_id=4seas、event 字段、内联 tickets;更新用 PATCH;取消用 DELETE。
+- 场地可同步创建/更新(POST /venues + availability),保持双边场地一致。
+- **契约风险**:API 无公开文档,字段可能变更——同步器对所有字段容错,解析失败跳过单条,不阻断主流程(与 4Seas-bot 的容错策略一致)。
 
----
+### 3.3 兜底方案:computer use(API 不可用时)
 
-## 4. Telegram Bot & Mini App
+- 若服务账号 API 路径受阻(权限/契约变更),降级为 **computer use 自动化**:持 4Seas 的 sola.day 账号,用浏览器自动化在 Web 界面完成活动创建(标题/时间/地点/描述/封面)。
+- 该模式只用于单向发布的兜底,不作为首选;失败进入人工队列并告警。
 
-### 4.1 架构
+### 3.4 与 4seasbot 的数据源关系(重要)
 
-    Telegram 用户
-       |  /newevent, /book, /today, /myevents ...
-       v
-    +--------+   initData 签名验证   +------------------+
-    |  Bot   +<--------------------->|  CommunityOS API |
-    |(aiogram|                       |   (同一后端)      |
-    | /gram) |                       +------------------+
-    +----+---+                            ^
-         | Mini App(React,复用 Web 端)     |
-         +----------------------------------> 直接调用 REST
+4seasbot 当前从 Social Layer 拉活动。本系统上线后:
 
-### 4.2 绑定与身份
-
-- 用户首次使用 Bot:发送 /start,点击"绑定账户"-> 打开 Mini App -> 输入邮箱 -> 收到验证邮件 -> 验证后 Telegram ID 与 Member 绑定(initData 中取 id/username,服务端验签)。
-- 未绑定用户使用 Bot:可浏览公开活动,报名时引导先注册。
-
-### 4.3 命令与交互
-
-| 命令/入口 | 行为 |
-| --- | --- |
-| /start | 欢迎 + 绑定引导 |
-| /today,/week | 今日/本周日程(按钮跳转 Mini App 详情) |
-| /newevent | 对话式快速创建:标题 -> 时间 -> 场地(内联键盘选择)-> 提交(走标准创建+规则校验) |
-| /book | 预订引导:选场地 -> 选时段 -> 填用途 -> 提交 |
-| /myevents,/mybookings | 我的活动与预订(含取消按钮) |
-| /points | 积分余额与最近流水 |
-| 通知推送 | 活动提醒、报名结果、审批请求(场地管理员收到"批准/拒绝"内联按钮) |
-| 每日 digest | 早 8 点推送当日活动清单(可订阅/退订) |
-
-### 4.4 Mini App(复杂表单)
-
-- 复用 Web 端同一前端代码库(PWA),检测到 Telegram WebView 时启用 Mini App 模式(主题适配、MainButton、HapticFeedback)。
-- 承载:完整活动创建表单、场地预订日历选择、报名表单、嘉宾名单与签到码。
-
-### 4.5 群集成
-
-- 社区群:活动发布时自动推送卡片(标题/时间/场地/报名按钮);支持 /event 命令查询。
-- 频道:每日 digest 广播。
+- 4seas-bot 增加 **CommunityOS 数据源适配器**(拉本系统 API),置于 fallback 链最上游:CommunityOS API → Sola API → Sola iCal → 本地 YAML。
+- 过渡期两个数据源可能重复(同一活动两边都有),bot 侧按 (source, event_id) 幂等去重;本系统活动在 Social Layer 的镜像由本系统同步器负责,bot 不再需要直接读 sola.day(保留为兜底)。
 
 ---
 
-## 5. Agent API(REST + MCP)
+## 4. Telegram 通知:经 4seasbot
 
-### 5.1 设计基线(借鉴 luma-mcp 安全模式)
+### 4.1 4seasbot 现状(调研结论)
 
-1. **读直接执行,写 draft+confirm**:查询类工具立即返回;所有创建/修改类工具分两步——draft 返回 draft_id(不产生业务副作用),confirm 才落库。草稿 1 小时过期、一次性确认。
-2. **独立身份与 scope**:每个 Agent 一个 API key;scope 细化到资源与动作(如 events:read, bookings:write);支持随时吊销。
-3. **全量审计**:JSONL 审计(actor key、tool、action、脱敏参数、结果、延迟、draft_id、confirm 人)。
-4. **脱敏与注入清洗**:日志脱敏密钥字段;自由文本 NFKC 归一化、去零宽字符、中和角色伪装。
-5. **零 LLM 决策**:工具内部路由全部规则化;限流(按 key:60 次/分钟)。
+- Python + python-telegram-bot,独立服务(systemd/launchd 部署),本地 SQLite。
+- 已有能力:每日 digest(19:00 Asia/Bangkok)、活动同步(可插拔事件源 + fallback 链)、/ask 问答、关键词触发、自定义命令、admin web 控制台(127.0.0.1:8477)。
+- 架构是**定时拉取 + 本地库**,没有入站 webhook API。
 
-### 5.2 REST API(节选)
+### 4.2 集成方案:拉取式 outbox(一期)
+
+本系统不直接推 Telegram,而是暴露两个出站 feed,由 4seasbot 拉取:
+
+    GET /v1/integrations/bot/events?from=&to=       # 活动列表(JSON,含场地/时间/链接)
+    GET /v1/integrations/bot/notifications?since=   # 通知 outbox(待投递消息)
+    POST /v1/integrations/bot/notifications/{id}/ack # 投递回执(可选,用于去重)
+
+- 4seas-bot 新增一个 CommunityOS source 适配器(约一个小 PR):在既有 sync job 里增加数据源,沿用其幂等 UPSERT、content_hash、窗口软删除机制。
+- 通知 outbox 记录:目标(chat_id / user telegram id,经 CAS 绑定关系解析)、模板变量、渠道、状态。
+- 投递节奏:digest 19:00(沿用现有 schedule);提醒类 T-24h/T-1h 由 bot 侧 job 按活动时间计算,或本系统在 outbox 标注 scheduled_at,bot 到点投递。
+
+### 4.3 为什么不是推送
+
+- 4seasbot 无入站 API,新增入站端点等于扩大既有服务的攻击面,且要改部署;
+- 拉取式与 bot 现有架构一致(可插拔源 + 本地库 + 失败重试),改动最小;
+- 本系统因此完全不接触 Telegram Bot Token——Token 只在 4seasbot 处,职责清晰。
+
+### 4.4 二期:Mini App
+
+- Telegram Mini App(完整创建/预订表单)二期实现;入口由 4seasbot 的菜单按钮/命令唤起,指向本系统 Web 端的 Mini App 模式(同一前端,initData 换 token,经 CAS 鉴权)。
+- 一期不依赖 Mini App:通知 + /events 类命令 + Web 端覆盖核心场景。
+
+---
+
+## 5. CAS 集成(账户/积分镜像/签到)
+
+本系统通过 CAS 客户端模块消费(详见 06-community-account-system.md):
+
+- **Auth**:注册/验证/登录/会话校验全部走 CAS;本系统只存 cas_user_id 与角色。
+- **Points(镜像)**:CAS/链上为权威;本系统定时同步余额与流水到本地镜像表,仅供展示;预订扣减(当前为 0)通过 CAS 接口执行。
+- **Check-in**:活动签到的"一次性领取网址 + 签名"由 CAS 签发;本系统负责主持人二维码轮换与现场扫码流程,领取结果回写 CAS。
+- **NFT(V2)**:CAS 对接外部 NFT 系统,本系统不直接对接 NFT。
+
+---
+
+## 6. Agent API(REST + MCP)
+
+(与 v1 一致,保留)
+
+### 6.1 设计基线(借鉴 luma-mcp)
+
+1. 读直接执行,写 draft+confirm(草稿 1 小时过期、一次性确认)。
+2. 独立身份与 scope:每个 Agent 一个 API key,可吊销。
+3. 全量审计(JSONL + 后台可查)。
+4. 脱敏与注入清洗(NFKC、去零宽字符)。
+5. 零 LLM 决策;限流 60 次/分钟/key。
+
+### 6.2 REST 节选
 
     # 读(直接执行)
-    GET  /v1/venues?building=&amenities=&capacity_min=
-    GET  /v1/venues/{id}
-    GET  /v1/venues/{id}/availability?from=&to=
-    GET  /v1/events?from=&to=&venue=&program=&tag=
-    GET  /v1/events/{id}
-    GET  /v1/events/{id}/registrations
-    GET  /v1/me/points
+    GET  /v1/venues, /v1/venues/{id}, /v1/venues/{id}/availability
+    GET  /v1/events, /v1/events/{id}, /v1/events/{id}/registrations
 
     # 写(draft + confirm)
-    POST /v1/events/draft                     -> {draft_id, preview}
-    POST /v1/events/draft/{draft_id}/confirm  -> 201 {event_id}
-    DELETE /v1/events/draft/{draft_id}        -> 幂等取消草稿
-    POST /v1/bookings/draft
-    POST /v1/bookings/draft/{draft_id}/confirm
-    POST /v1/events/{id}/cancel               -> 同样两步(防误删)
+    POST /v1/events/draft                      -> {draft_id, preview}
+    POST /v1/events/draft/{draft_id}/confirm   -> 201
+    DELETE /v1/events/draft/{draft_id}         -> 幂等
+    POST /v1/bookings/draft / confirm
+    POST /v1/events/{id}/cancel                -> 两步
 
-### 5.3 MCP 工具清单(节选)
+### 6.3 MCP 工具清单(节选)
 
-读工具(直接执行):
+读工具:community_health、search_venues、check_availability、get_event、list_events、get_venue_rules、get_my_points(镜像余额)。
 
-- community_health —— 连通性 + 权限自检
-- search_venues —— 按建筑/楼层/设备/容量/时段查场地
-- check_availability —— 场地可用性(含缓冲与规则)
-- get_event / list_events —— 活动查询(支持时间范围/场地/Program 过滤)
-- get_venue_rules —— 场地规则(活动类型/积分价/提前窗口)
-- get_my_points —— 调用者(绑定的成员)积分余额
+写工具(draft+confirm 对):create_event、update_event、cancel_event、create_booking、register_event;cancel_draft(幂等)。
 
-写工具(draft+confirm 对):
-
-- create_event_draft / create_event_confirm
-- update_event_draft / update_event_confirm
-- cancel_event_draft / cancel_event_confirm
-- create_booking_draft / create_booking_confirm
-- register_event_draft / register_event_confirm(以绑定成员身份报名)
-- cancel_draft(幂等)
-
-每个 draft 工具返回结构化预览(含积分预估、冲突检查结果、规则校验结果),confirm 时才执行与人类用户完全相同的发布链路(含 Luma/Social Layer 同步与通知)。
-
-### 5.4  Agent 与成员身份绑定
-
-- Agent 可代表"已绑定成员"操作(如代成员报名),audit 中同时记录 agent_key 与 member_id。
-- 未绑定的 Agent 只能读公开数据;写操作必须声明 member 绑定且该成员已验证。
+每个 draft 返回结构化预览(冲突检查、规则校验、积分预估);confirm 时执行与人类用户完全相同的发布链路(含 Luma/Social Layer 同步与通知)。
 
 ---
 
-## 6. 通知与邮件基础设施
+## 7. 通知与邮件
 
-### 6.1 邮件(事务型)
-
-- 用途:注册验证(magic link/验证 token)、活动通知、预订结果、每日 digest。
-- 要点:独立发信域名 + SPF/DKIM/DMARC;验证 token 24 小时有效、一次性、使用后失效;退订链接(营销类);发送记录入库可查。
-- 供应商候选:Resend / AWS SES / Postmark(按成本与可达率评估)。
-
-### 6.2 Telegram 推送
-
-- Bot 主动消息(需用户先与 bot 交互过);频道 digest 广播;群卡片。
-
-### 6.3 站内通知中心
-
-- 所有通知存档,支持已读/未读、偏好设置(按事件类型开关渠道)。
-
-### 6.4 通知触发矩阵(摘要)
-
-| 事件 | 邮件 | Telegram | 站内 |
-| --- | --- | --- | --- |
-| 注册验证 | 必须 | - | - |
-| 验证成功/欢迎 | 是 | 是(已绑定) | 是 |
-| 活动发布 | 广播 | 群/频道 + 订阅者 | 是 |
-| 活动提醒 T-24h / T-1h | 是 | 是 | 是 |
-| 报名成功/待审批/被拒 | 是 | 是 | 是 |
-| 活动改期/取消 | 是 | 是 | 是 |
-| 预订提交/审批结果 | 是 | 是(含审批按钮) | 是 |
-| 积分变动 | 周汇总 | 实时 | 是 |
-| 每日 digest | 是(可订阅) | 是(可订阅) | 是 |
+- 邮件:本系统直发(事务邮件:Resend/SES);注册验证邮件由 CAS 负责。
+- Telegram:经 4seasbot 拉取 outbox(见第 4 节)。
+- 站内:通知中心存档。
+- 触发矩阵见 02-product-plan.md 5.5。
 
 ---
 
-## 7. 集成配置与管理
+## 8. 集成配置与管理
 
-- 后台"集成管理"页:Luma API key 状态与订阅检测、Social Layer 模式(A/B/C)、Telegram Bot token、Agent key 的创建/吊销/scope 编辑、webhook 端点与密钥。
-- 每个集成有独立开关与限流配置;同步失败在后台可见(队列深度、最近错误)。
-- 所有集成操作写入审计日志。
+后台"集成管理"页:Luma key 状态与订阅检测、Social Layer 服务账号状态、4seasbot feed 地址与 token、Agent key 创建/吊销/scope。所有集成开关独立、失败可见(队列深度、最近错误),全部写入审计日志。
