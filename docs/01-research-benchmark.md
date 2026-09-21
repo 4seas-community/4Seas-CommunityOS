@@ -106,6 +106,8 @@ Social Layer 是出身于 706 社区的开源、去中心化"社交层"协议与
 
 **注意**:Social Layer 是通用协议型产品,不做场地运营(额度、收费、工单)、不做审批工作流、不做通知矩阵,这些正是 4Seas 要补的。
 
+**API 实况补充(2026-09 调研)**:Social Layer 无公开 API 文档,但其前端开源仓库 sociallayer-im/seastar-app 的 packages/sola-sdk 揭示了完整的 api.sola.day/api/v1 契约,且 4Seas-bot 已在生产使用其只读端点。实测确认存在**可写端点**:POST /events(创建,内联 roles/tickets)、PATCH /events/:id、DELETE /events/:id(软取消)、POST /events/:id/approve、POST /events/:id/participants/check_in、POST /venues(/availability、/conflict)等;认证支持邮箱验证码、手机验证码、Google OAuth、SIWE 钱包登录(JWT)。**结论:Social Layer 单向发布可基于服务账号 JWT 直接调 API 实现**(详见 04-integrations.md 第 3 节),无需 computer use(仅作兜底)。
+
 ---
 
 ## 3. Zuzalu.city — "Community OS"概念的完整定义
