@@ -62,3 +62,8 @@ web_modules/
 .open-next/
 .wrangler/
 wrangler-state/
+# Next.js build output
+.next/
+
+# local env
+.env
