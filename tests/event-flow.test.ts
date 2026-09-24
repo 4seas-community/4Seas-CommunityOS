@@ -12,7 +12,12 @@ import { notificationOutbox } from '../src/modules/notify/schema';
 import { eq, sql } from 'drizzle-orm';
 import { seedCommunity, seedMember, seedVenue, sessionFor } from './helpers';
 
-const startAt = new Date(Date.now() + 48 * 3600 * 1000);
+// Next day 10:00 Asia/Bangkok (03:00 UTC) — always inside venue opening hours.
+const startAt = (() => {
+  const d = new Date(Date.now() + 24 * 3600 * 1000);
+  d.setUTCHours(3, 0, 0, 0);
+  return d;
+})();
 const endAt = new Date(startAt.getTime() + 2 * 3600 * 1000);
 
 function eventInput(venueId: string) {
