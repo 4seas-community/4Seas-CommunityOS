@@ -78,6 +78,19 @@
 
 对账(每日):拉取 Luma 侧活动列表,比对存在性与状态;外部人工修改产生差异时**以我方为准重新覆盖或人工确认**,不自动回写我方。
 
+
+### 2.5 成本与免费替代方案(2026-09 实测)
+
+- **Luma API 需要 Luma Plus**(官方文档明确:"To use the Luma API, you need a Luma Plus subscription";API Key 在 luma.com/calendar/manage/api-keys 按日历签发,Calendar key 限流 200/min)。免费版**不能**通过 API 自动发布,Zapier 自动化同样属于 Plus 功能。
+- Luma 免费版:无限活动与嘉宾、每周 500 封邀请/newsletter、付费活动 5% 平台费、无 API、无 Zapier。
+- Luma Plus(日历级订阅,月付/年付,年付约省 11%,美元计价;额外 admin 席位 $12/月;额外发送 $50/月/5k 档):0% 平台费、5000 发送/周、API + Zapier、自定义 URL、票务收税、check-in manager 角色。当前确切订阅价以 lu.ma/pricing 页面为准(价格为动态渲染,未能抓到具体数字)。
+- **免费自动发布路径**:
+  1. **Social Layer(sola.day)API 免费可用**——4Seas 已在用,单向发布走服务账号 JWT(见第 3 节),零成本;
+  2. **本系统自有活动页 + iCal + 4seasbot 分发**——完全自控;
+  3. computer-use 浏览器自动化操作免费 Luma 账号——可行但脆弱,仅作兜底;
+  4. 半自动:系统生成 Luma 就绪内容,运营一键粘贴。
+- **建议**:若 Luma 继续作为对外门面,订阅一个 4Seas 日历的 Plus(付费活动多时 0% 平台费即可覆盖成本);否则一期用 Social Layer + 自有页面对外分发,Luma 同步留到 Plus 就绪。
+
 ### 2.4 风险与对策
 
 | 风险 | 对策 |

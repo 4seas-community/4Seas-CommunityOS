@@ -12,6 +12,7 @@
 | [03-domain-model.md](03-domain-model.md) | 领域与数据模型(v2):实体模型(建筑-楼层-场地、活动、预订、成员、积分镜像、签到令牌、通知 outbox)、状态机、规则引擎、核心约束、API 草图 | 产品/后端 |
 | [04-integrations.md](04-integrations.md) | 集成架构(v2):Luma 单向发布(字段映射/限流/对账)、Social Layer 单向发布(实测 API + computer-use 兜底)、Telegram 通知经 4seasbot(拉取式)、Agent API(REST + MCP draft+confirm) | 后端/集成 |
 | [05-roadmap.md](05-roadmap.md) | 路线图(v2):M0-M2 阶段与验收标准、V2 远期(链上积分/NFT/Mini App)、风险、开放问题 | 全员/管理层 |
+| [08-deployment.md](08-deployment.md) | 部署:Cloudflare Pages(4seas-communityos.pages.dev)配置、CI、Hyperdrive、分支与发布策略 | 运维/全员 |
 | [06-community-account-system.md](06-community-account-system.md) | **CAS 需求与接口规范**:账户/积分/签到/NFT 统一账户层的职责边界、OpenAPI 风格接口契约、对接清单、里程碑建议 | 后端/CAS 团队 |
 | [07-future-onchain-nft.md](07-future-onchain-nft.md) | V2 规划记录:链上积分(签到/host/志愿者/speaker 赚取,兑换场地/咖啡/住宿)、NFT 签到(轮换二维码 + 一次性领取网址 + 数字上限) | 产品/全员 |
 
