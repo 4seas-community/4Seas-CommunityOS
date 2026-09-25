@@ -14,10 +14,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed.ts",
-    "cf:build": "next build && opennextjs-cloudflare build --skipNextBuild",
-    "cf:preview": "pnpm cf:build && opennextjs-cloudflare preview",
-    "cf:stage": "bash scripts/cf-stage.sh",
-    "cf:deploy": "pnpm cf:build && pnpm cf:stage && wrangler pages deploy .deploy --project-name=4seas-communityos --branch=main"
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && wrangler pages deploy"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

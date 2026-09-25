@@ -4,12 +4,6 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": ".open-next/assets",
-  "hyperdrive": [
-    {
-      "binding": "HYPERDRIVE",
-      "id": "REPLACE_WITH_HYPERDRIVE_ID"
-    }
-  ],
   "vars": {
     "APP_URL": "https://4seas-communityos.pages.dev"
   }

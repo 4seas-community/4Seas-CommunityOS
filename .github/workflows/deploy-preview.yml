@@ -17,8 +17,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm cf:build
+      - run: pnpm cf:stage
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .open-next/assets --project-name=4seas-communityos --branch=preview
+          command: pages deploy .deploy --project-name=4seas-communityos --branch=preview
