@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
+import logo from '../../public/4seas-logo.png';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -10,8 +12,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <header style={{ borderBottom: '1px solid #e5e7eb', padding: '12px 24px', display: 'flex', gap: 16 }}>
-          <strong>4Seas CommunityOS</strong>
+        <header style={{ borderBottom: '1px solid #e5e7eb', padding: '12px 24px', display: 'flex', gap: 16, alignItems: 'center' }}>
+          <Image src={logo} alt="4Seas" width={100} height={23} style={{ height: 23, width: 'auto' }} priority />
+          <strong>CommunityOS</strong>
           <nav style={{ display: 'flex', gap: 12, fontSize: 14 }}>
             <a href="/">Home</a>
             <a href="/events">Events</a>

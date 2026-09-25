@@ -4,7 +4,7 @@
  */
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { db } from '../../lib/db';
+import { db, txDb } from '../../lib/db';
 import { config } from '../../lib/config';
 import { events, registrations, checkinTokens, type Event, type Registration } from './schema';
 import { venues, venueRules, buildings, floors, communities } from '../place/schema';
@@ -72,7 +72,9 @@ export async function createEvent(input: EventCreateInput, actor: SessionPayload
   const endAt = new Date(input.endAt);
 
   // Build event + optional venue booking atomically.
-  const created = await db.transaction(async (tx) => {
+  // txDb is the WebSocket-pooled handle: interactive transactions need it
+  // (the stateless HTTP driver used for plain queries has no transactions).
+  const created = await txDb.transaction(async (tx) => {
     // Community comes from the venue's building (single-community deployment).
     let communityId: string | null = null;
     if (input.venueId) {

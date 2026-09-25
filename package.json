@@ -20,6 +20,7 @@
     "cf:deploy": "pnpm cf:build && pnpm cf:stage && wrangler pages deploy .deploy --project-name=4seas-communityos --branch=main"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.12",
     "next": "15.5.25",
