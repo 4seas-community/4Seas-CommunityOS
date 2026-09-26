@@ -15,6 +15,8 @@ if (process.env.TEST_DATABASE_URL) {
 }
 
 const TABLES = [
+  'agent_drafts',
+  'agent_keys',
   'audit_logs',
   'auth_tokens',
   'notification_outbox',

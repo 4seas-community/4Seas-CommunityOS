@@ -8,6 +8,7 @@ import { registerPlaceRoutes } from '../modules/place/routes';
 import { registerEventRoutes } from '../modules/event/routes';
 import { registerBookingRoutes } from '../modules/booking/routes';
 import { registerIntegrationRoutes } from '../modules/integration/routes';
+import { registerAgentRoutes } from '../modules/agent/routes';
 
 export function buildRouter(): Router {
   const router = new Router();
@@ -17,6 +18,7 @@ export function buildRouter(): Router {
   registerEventRoutes(router);
   registerBookingRoutes(router);
   registerIntegrationRoutes(router);
+  registerAgentRoutes(router);
   return router;
 }
 
