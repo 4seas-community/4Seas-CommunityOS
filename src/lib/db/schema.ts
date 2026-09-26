@@ -10,4 +10,5 @@ export * from '../../modules/people/schema';
 export * from '../../modules/notify/schema';
 export * from '../../modules/integration/schema';
 export * from '../../modules/auth/schema';
+export * from '../../modules/agent/schema';
 export * from './audit-schema';
