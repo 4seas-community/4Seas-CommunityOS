@@ -38,7 +38,11 @@ export const config = {
  * mock upstream clients) are gated on this so a production deploy can never
  * silently fall back to them.
  */
-export const isDevelopment = process.env.NODE_ENV !== 'production';
+/**
+ * Secure by default: an unset NODE_ENV (Cloudflare Workers do not set one) must
+ * behave as production, otherwise dev-only affordances would leak into prod.
+ */
+export const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
 /** Placeholder secrets shipped in .env.example — never valid in production. */
 const INSECURE_DEFAULTS = new Set(['', 'dev-only-session-secret-change-me', 'dev-bot-feed-token']);
