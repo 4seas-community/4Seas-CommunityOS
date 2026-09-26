@@ -23,3 +23,24 @@
   NEON_API_KEY —— 均来自 ~/Dev/.env 与 ~/Dev/mycelium/blog/.env,勿入库
 - **已知取舍**:OpenNext 会把 Next standalone server(node_modules 追踪副本)打包成
   Worker,产物约 2700 文件/5MB —— 这是 Next.js on Workers 的正常形态,非错误
+
+## 7. M2 已交付(2026-09-25)
+
+| 能力 | 状态 | 说明 |
+| --- | --- | --- |
+| Luma 单向发布 | ✅ 代码+测试(PR #14) | mapper/client/sync;真实对接需 Luma Plus(LUMA_API_KEY + LUMA_ENABLED) |
+| Social Layer 单向发布 | ✅ 代码+测试(PR #15) | sola.day API(SDK 字段);需服务账号 JWT(SOCIAL_LAYER_TOKEN) |
+| 同步 outbox 处理器 | ✅ | `POST /v1/integrations/sync/run`(service token),供 cron 触发 |
+| Agent API | ✅ 线上验证(PR #16) | `/v1/agent/*` 读开放、写 draft+confirm(1h 过期、单次确认、幂等取消) |
+| MCP server | ✅ | `mcp/server.mjs`,零依赖 stdio,9 个工具代理 Agent API |
+
+**Agent API 线上端到端验证**(4seas-communityos.pages.dev):
+读取场地 → 创建事件草稿(拿到 preview)→ confirm 落库 → `/api/events` 可见 → 重复 confirm 被拒 → 未绑定成员的 key 写入被拒。
+
+运维命令:
+
+    # 生成 Agent key(密钥只显示一次)
+    pnpm tsx scripts/agent-key.ts "claude-desktop" "venues:read,events:read,events:write,bookings:write"
+
+    # MCP(本地 stdio)
+    COS_API_URL=https://4seas-communityos.pages.dev COS_AGENT_KEY=cos_ak_... node mcp/server.mjs
