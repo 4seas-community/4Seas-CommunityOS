@@ -5,7 +5,8 @@
  *   GET  /api/bookings?venue=&from=&to=      (occupancy overview)
  */
 import type { Router } from '../../lib/http';
-import { json, unauthorized } from '../../lib/errors';
+import { forbidden, json, unauthorized } from '../../lib/errors';
+import { hasRole } from '../../lib/auth/roles';
 import * as service from './service';
 import { db } from '../../lib/db';
 import { venues } from '../place/schema';
@@ -49,37 +50,56 @@ export function registerBookingRoutes(router: Router): void {
     return json({ booking }, 200, { 'x-audit-logged': '1' });
   });
 
+  /**
+   * Occupancy overview. Session required: booking rows carry member identity, so
+   * this is never public (the previous public version leaked member emails).
+   * - venue managers / admins see the whole requested range
+   * - everyone else only sees their own bookings
+   */
   router.get('/api/bookings', async (_req, ctx) => {
+    const session = requireSession(ctx.session);
     const from = ctx.url.searchParams.get('from');
     const to = ctx.url.searchParams.get('to');
     const venueId = ctx.url.searchParams.get('venue') ?? undefined;
-    const memberId = ctx.url.searchParams.get('member') ?? undefined;
     const status = ctx.url.searchParams.get('status') ?? undefined;
+
+    const isCommunityAdmin = hasRole(session.roles, 'admin');
+    const canSeeVenue = venueId ? hasRole(session.roles, 'venue_manager', 'venue:' + venueId) : false;
+    const unrestricted = isCommunityAdmin || canSeeVenue;
+
     const rows = await service.listBookings({
       venueId,
-      memberId,
       status,
+      memberId: unrestricted ? ctx.url.searchParams.get('member') ?? undefined : session.sub,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
     });
-    // Occupancy overview: join venue + member names (docs/03 §6 "占用总览").
+
     const venueMap = new Map<string, string>();
-    const memberMap = new Map<string, string>();
     for (const v of await db.select().from(venues)) venueMap.set(v.id, v.name);
-    for (const m of await db.select().from(members)) memberMap.set(m.id, m.displayName ?? m.email);
+    // Member names are only resolved for callers allowed to see other people's rows.
+    const memberMap = new Map<string, string>();
+    if (unrestricted) {
+      for (const m of await db.select().from(members)) memberMap.set(m.id, m.displayName ?? m.email);
+    }
     return json({
       bookings: rows.map((b) => ({
         ...b,
         venueName: venueMap.get(b.venueId) ?? null,
-        memberName: memberMap.get(b.memberId) ?? null,
+        memberName: b.memberId === session.sub ? 'you' : (memberMap.get(b.memberId) ?? (unrestricted ? null : 'member')),
       })),
     });
   });
 
+  /** A booking is visible to its owner, the venue's manager, or a community admin. */
   router.get('/api/bookings/:id', async (_req, ctx) => {
-    const rows = await service.listBookings({});
-    const b = rows.find((x) => x.id === ctx.params.id);
-    if (!b) return json({ error: { code: 'not_found', message: 'Booking not found' } }, 404);
+    const session = requireSession(ctx.session);
+    const b = await service.getBooking(ctx.params.id);
+    const allowed =
+      b.memberId === session.sub ||
+      hasRole(session.roles, 'admin') ||
+      hasRole(session.roles, 'venue_manager', 'venue:' + b.venueId);
+    if (!allowed) throw forbidden('Not allowed to view this booking');
     return json({ booking: b });
   });
 }

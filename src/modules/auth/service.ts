@@ -7,9 +7,9 @@
  *     points authority, check-in tokens, NFT records.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, isNull, lt } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { config } from '../../lib/config';
+import { config, isDevelopment } from '../../lib/config';
 import { sendEmail } from '../../lib/email';
 import { conflict, badRequest, unauthorized } from '../../lib/errors';
 import { authTokens, type AuthToken } from './schema';
@@ -38,7 +38,30 @@ async function issueToken(email: string, purpose: 'verify_email' | 'login'): Pro
   return raw;
 }
 
+/**
+ * Consume a one-time token.
+ *
+ * The claim is a single conditional UPDATE (… WHERE consumed_at IS NULL) so two
+ * concurrent requests can never both succeed — the previous read-then-write let
+ * a raced token be used more than once.
+ */
 async function consumeToken(raw: string, purpose: 'verify_email' | 'login'): Promise<string> {
+  const [claimed] = await db
+    .update(authTokens)
+    .set({ consumedAt: new Date() })
+    .where(
+      and(
+        eq(authTokens.tokenHash, hashToken(raw)),
+        eq(authTokens.purpose, purpose),
+        isNull(authTokens.consumedAt),
+        gt(authTokens.expiresAt, new Date()),
+      ),
+    )
+    .returning();
+
+  if (claimed) return claimed.email;
+
+  // Nothing claimed: distinguish invalid / already used / expired for the caller.
   const [token] = await db
     .select()
     .from(authTokens)
@@ -46,9 +69,7 @@ async function consumeToken(raw: string, purpose: 'verify_email' | 'login'): Pro
     .limit(1);
   if (!token) throw unauthorized('invalid token');
   if (token.consumedAt) throw unauthorized('token already used');
-  if (token.expiresAt.getTime() < Date.now()) throw badRequest('token expired', { code: 'token_expired' });
-  await db.update(authTokens).set({ consumedAt: new Date() }).where(eq(authTokens.id, token.id));
-  return token.email;
+  throw badRequest('token expired', { code: 'token_expired' });
 }
 
 /** Register with an email. Creates an unverified member and sends the verification link. */
@@ -92,8 +113,10 @@ export async function requestLogin(email: string): Promise<{ devToken?: string }
       subject: 'Your 4Seas login link',
       body: 'Login: ' + config.appUrl + '/login/verify?token=' + token,
     });
-    // In console-email mode (dev/tests) surface the token so flows are runnable.
-    if (config.emailBackend !== 'smtp') return { devToken: token };
+    // Dev convenience ONLY: with the console email backend the token is already
+    // written to the server log, so returning it over HTTP adds no new exposure.
+    // In production this must never happen — that would be account takeover.
+    if (isDevelopment && config.emailBackend !== 'smtp') return { devToken: token };
   }
   return {};
 }

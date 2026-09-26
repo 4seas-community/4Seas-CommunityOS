@@ -33,19 +33,22 @@ export function registerEventRoutes(router: Router): void {
     const view = ctx.url.searchParams.get('view') ?? undefined;
     const from = ctx.url.searchParams.get('from');
     const to = ctx.url.searchParams.get('to');
-    const events = await service.listEvents({
-      view: view === 'day' || view === 'week' ? view : 'list',
-      venue: ctx.url.searchParams.get('venue') ?? undefined,
-      program: ctx.url.searchParams.get('program') ?? undefined,
-      tag: ctx.url.searchParams.get('tag') ?? undefined,
-      from: from ? new Date(from) : undefined,
-      to: to ? new Date(to) : undefined,
-    });
+    const events = await service.listEvents(
+      {
+        view: view === 'day' || view === 'week' ? view : 'list',
+        venue: ctx.url.searchParams.get('venue') ?? undefined,
+        program: ctx.url.searchParams.get('program') ?? undefined,
+        tag: ctx.url.searchParams.get('tag') ?? undefined,
+        from: from ? new Date(from) : undefined,
+        to: to ? new Date(to) : undefined,
+      },
+      ctx.session,
+    );
     return json({ events });
   });
 
   router.get('/api/events/:id', async (_req, ctx) => {
-    const detail = await service.getEvent(ctx.params.id);
+    const detail = await service.getEvent(ctx.params.id, ctx.session);
     return json(detail);
   });
 
@@ -90,7 +93,7 @@ export function registerEventRoutes(router: Router): void {
 
   router.get('/api/events/:id/check-in', async (_req, ctx) => {
     const session = requireSession(ctx.session);
-    const token = await service.getActiveCheckinToken(ctx.params.id);
+    const token = await service.getActiveCheckinToken(ctx.params.id, session);
     return json({ token, active: Boolean(token) });
   });
 

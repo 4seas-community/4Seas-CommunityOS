@@ -86,7 +86,8 @@ export async function listVenueRules(venueId: string) {
 }
 
 export async function createVenue(input: VenueCreateInput, actor: SessionPayload) {
-  requireRole(actor, 'venue_manager');
+  // Creating a venue is a community-level privilege, not "manager of one venue".
+  requireRole(actor, 'admin');
   const [created] = await db
     .insert(venues)
     .values({ ...input, areaSqm: input.areaSqm == null ? null : String(input.areaSqm) })
@@ -103,7 +104,7 @@ export async function createVenue(input: VenueCreateInput, actor: SessionPayload
 }
 
 export async function updateVenue(venueId: string, input: Partial<VenueCreateInput>, actor: SessionPayload) {
-  requireRole(actor, 'venue_manager');
+  requireRole(actor, 'venue_manager', 'venue:' + venueId);
   const existing = await getVenueWithRules(venueId);
   const { areaSqm, ...rest } = input;
   const [updated] = await db
@@ -129,7 +130,7 @@ export async function updateVenue(venueId: string, input: Partial<VenueCreateInp
 
 /** PUT /api/venues/{id}/rules — append a new rule version (old bookings keep their version). */
 export async function putVenueRules(venueId: string, input: VenueRulesInput, actor: SessionPayload) {
-  requireRole(actor, 'venue_manager');
+  requireRole(actor, 'venue_manager', 'venue:' + venueId);
   await getVenueWithRules(venueId); // 404 when missing
   const rules = await listVenueRules(venueId);
   const version = rules.reduce((max, r) => Math.max(max, r.version), 0) + 1;

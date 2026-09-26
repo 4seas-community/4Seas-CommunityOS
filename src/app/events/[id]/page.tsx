@@ -1,5 +1,6 @@
 import { apiGet } from '../../../lib/api-client';
-import { DateBlock, EmptyState } from '../../../components/event-card';
+import { DateBlock } from '../../../components/event-card';
+import { RegisterButton } from '../../../components/forms';
 
 interface EventDetail {
   id: string;
@@ -131,12 +132,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       <div className="card" style={{ marginTop: 14 }}>
         <h3>Register</h3>
         <p className="muted">Sign in with your email first — we send a one-time link, no password needed.</p>
-        <form method="get" action={'/api/events/' + ev.id + '/registrations'}>
-          <input type="hidden" name="eventId" value={ev.id} />
-          <button type="submit" className="btn btn-primary">
-            Register for this event
-          </button>
-        </form>
+        <RegisterButton eventId={ev.id} />
       </div>
     </article>
   );

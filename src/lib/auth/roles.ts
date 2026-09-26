@@ -10,16 +10,25 @@ export interface Role {
   role: string;
 }
 
-/** Does the role set grant `role` for `scope` (e.g. "venue:<uuid>", "community:*")? */
+/**
+ * Does the role set grant `role` for `scope` (e.g. "venue:<uuid>", "community:*")?
+ *
+ * Scoping rules (security-critical — see the cross-venue bypass this used to have):
+ *  - omitted scope            → presence check only; callers that guard a specific
+ *                               resource MUST pass its scope, or any holder of the
+ *                               role anywhere would pass.
+ *  - exact "venue:<id>"       → matches only that venue.
+ *  - wildcard "venue:*"       → matches every venue scope (and only venue scopes).
+ *  - "community:*"            → community-wide role, applies to every scope.
+ */
 export function hasRole(roles: Role[], role: string, scope?: string): boolean {
   for (const r of roles) {
     if (r.role !== role) continue;
     if (!scope) return true;
     if (r.scope === scope) return true;
-    const [kind, value] = r.scope.split(':');
-    if (value === '*') return true;
-    if (kind === 'community') return true; // community-wide roles apply everywhere
-    if (kind === 'venue' && scope.startsWith('venue:')) return true;
+    if (r.scope.endsWith(':*') && scope.startsWith(r.scope.slice(0, -1))) return true;
+    const [kind] = r.scope.split(':');
+    if (kind === 'community') return true;
   }
   return false;
 }
