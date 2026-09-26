@@ -1,0 +1,24 @@
+# 4Seas CommunityOS — local development database.
+# Usage: docker compose up -d && pnpm install && pnpm db:migrate && pnpm seed && pnpm dev
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: communityos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: community
+      POSTGRES_PASSWORD: community
+      POSTGRES_DB: communityos
+    ports:
+      # Host port 5433 to avoid clashing with other local postgres instances.
+      - '5433:5432'
+    volumes:
+      - communityos-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U community -d communityos']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  communityos-pgdata:
