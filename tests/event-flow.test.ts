@@ -8,15 +8,14 @@ import * as eventService from '../src/modules/event/service';
 import { casClient } from '../src/modules/cas';
 import { db } from '../src/lib/db';
 import { events } from '../src/modules/event/schema';
-import { venues } from '../src/modules/place/schema';
 import { notificationOutbox } from '../src/modules/notify/schema';
 import { eq, sql } from 'drizzle-orm';
 import { seedCommunity, seedMember, seedVenue, sessionFor } from './helpers';
 
-// Next day 12:00 Asia/Bangkok (05:00 UTC) — safely inside every opening window.
+// Next day 10:00 Asia/Bangkok (03:00 UTC) — always inside venue opening hours.
 const startAt = (() => {
   const d = new Date(Date.now() + 24 * 3600 * 1000);
-  d.setUTCHours(5, 0, 0, 0);
+  d.setUTCHours(3, 0, 0, 0);
   return d;
 })();
 const endAt = new Date(startAt.getTime() + 2 * 3600 * 1000);
