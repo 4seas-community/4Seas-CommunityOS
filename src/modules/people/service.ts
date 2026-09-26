@@ -132,6 +132,22 @@ export async function applyTelegramBinding(memberId: string, telegram: { id: str
   return updated;
 }
 
+/**
+ * Unbind Telegram by setting the column to NULL.
+ *
+ * The previous version wrote an empty string, which collided with the unique
+ * index on the second unbind ("telegram account already bound…" / 23505) — the
+ * first member to unbind effectively blocked everyone else.
+ */
+export async function clearTelegramBinding(memberId: string): Promise<Member> {
+  const [updated] = await db
+    .update(members)
+    .set({ telegramId: null, telegramUsername: null, updatedAt: new Date() })
+    .where(eq(members.id, memberId))
+    .returning();
+  return updated;
+}
+
 export function publicMember(m: Member) {
   return {
     id: m.id,

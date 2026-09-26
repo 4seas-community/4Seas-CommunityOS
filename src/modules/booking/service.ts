@@ -262,8 +262,24 @@ async function loadMember(memberId: string) {
   return m;
 }
 
+/**
+ * 23505 = unique_violation, 23P01 = exclusion_violation (the tstzrange overlap
+ * guard on bookings — see drizzle/0001_booking_exclusion_constraint.sql).
+ */
 function isUniqueViolation(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505';
+  // Drizzle wraps driver errors (DrizzleQueryError), so the Postgres code can be
+  // on the error itself or on its cause.
+  for (const candidate of [err, (err as { cause?: unknown } | null)?.cause]) {
+    if (typeof candidate !== 'object' || candidate === null) continue;
+    const code = (candidate as { code?: string }).code;
+    if (code === '23505' || code === '23P01') return true;
+  }
+  return false;
+}
+
+/** Single-booking fetch used by the route layer (which decides visibility). */
+export async function getBooking(bookingId: string): Promise<Booking> {
+  return loadBooking(bookingId);
 }
 
 async function loadBooking(bookingId: string): Promise<Booking> {

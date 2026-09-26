@@ -7,10 +7,27 @@
  *   POST /v1/integrations/bot/notifications/{id}/ack
  */
 import type { Router } from '../../lib/http';
+import { configProblems, isDevelopment } from '../../lib/config';
 import { json, badRequest } from '../../lib/errors';
 import * as service from './service';
 
 export function registerIntegrationRoutes(router: Router): void {
+  /**
+   * Readiness probe. Reports unsafe configuration instead of failing silently —
+   * the review found several dev fallbacks that would otherwise run in prod.
+   */
+  router.get('/v1/healthz', async () => {
+    const problems = configProblems();
+    return json(
+      {
+        ok: problems.length === 0,
+        mode: isDevelopment ? 'development' : 'production',
+        problems,
+      },
+      problems.length === 0 ? 200 : 503,
+    );
+  });
+
   router.get('/v1/integrations/bot/events', async (_req, ctx) => {
     const from = ctx.url.searchParams.get('from');
     const to = ctx.url.searchParams.get('to');

@@ -82,9 +82,8 @@ const bindMyTelegram: Handler = async (req, ctx) => {
 /** DELETE /api/me/telegram — unbind. */
 const unbindMyTelegram: Handler = async (_req, ctx) => {
   if (!ctx.session) throw badRequest('Not signed in');
-  const member = await people.getMember(ctx.session.sub);
-  await people.applyTelegramBinding(member.id, { id: '', username: null });
-  return json({ bound: false });
+  const member = await people.clearTelegramBinding(ctx.session.sub);
+  return json({ bound: false, telegramId: member.telegramId });
 };
 
 /**

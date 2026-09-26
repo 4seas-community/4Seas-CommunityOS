@@ -123,13 +123,46 @@ function entityTypeOf(path: string): string | null {
   return singular[seg[1]] ?? seg[1];
 }
 
-/** Read + validate a JSON body against a zod schema. */
+/**
+ * Read + validate a request body against a zod schema.
+ *
+ * Accepts JSON, and also classic HTML form bodies (`application/x-www-form-urlencoded`
+ * / `multipart/form-data`) so server-rendered <form> submissions work without
+ * client JavaScript. Numeric-looking and comma-separated fields are normalised
+ * because form values always arrive as strings.
+ */
 export async function readJson<T>(req: Request, schema: { parse: (v: unknown) => T }): Promise<T> {
+  const contentType = req.headers.get('content-type') ?? '';
   let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    throw badRequest('Invalid JSON body');
+
+  if (contentType.includes('form-urlencoded') || contentType.includes('multipart/form-data')) {
+    const form = await req.formData();
+    const obj: Record<string, unknown> = {};
+    for (const [key, value] of form.entries()) {
+      if (typeof value !== 'string') continue;
+      obj[key] = normalizeFormValue(value);
+    }
+    raw = obj;
+  } else {
+    try {
+      raw = await req.json();
+    } catch {
+      throw badRequest('Invalid JSON body');
+    }
   }
-  return schema.parse(raw);
+
+  try {
+    return schema.parse(raw);
+  } catch (err) {
+    // Zod errors would otherwise surface as a generic 500.
+    throw badRequest('Invalid request body: ' + (err as Error).message.slice(0, 300));
+  }
+}
+
+/** Form strings -> numbers / arrays, so one schema serves JSON and form posts. */
+function normalizeFormValue(value: string): unknown {
+  if (value === '') return undefined;
+  if (/^-?\d+$/.test(value)) return Number(value);
+  if (value.includes(',')) return value.split(',').map((s) => s.trim()).filter(Boolean);
+  return value;
 }

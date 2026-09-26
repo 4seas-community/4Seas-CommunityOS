@@ -180,33 +180,58 @@ export async function createEvent(input: EventCreateInput, actor: SessionPayload
 
 // ---------------------------------------------------------------- read
 
-export async function listEvents(query: {
-  view?: 'day' | 'week' | 'list';
-  venue?: string;
-  program?: string;
-  tag?: string;
-  from?: Date;
-  to?: Date;
-}) {
+/**
+ * Visibility rules (audited: the previous version leaked drafts to the public):
+ *  - draft / pending_review / canceled → only host, co-host, venue manager, admin
+ *  - visibility 'private'              → only the same privileged set
+ *  - visibility 'members'              → any signed-in member
+ *  - visibility 'public'               → everyone
+ */
+export function canSeeEventForTest(e: Event, actor: SessionPayload | null): boolean {
+  return canSeeEvent(e, actor);
+}
+
+function canSeeEvent(e: Event, actor: SessionPayload | null): boolean {
+  const gated = ['draft', 'pending_review', 'canceled'].includes(e.status);
+  if (!actor) return e.visibility === 'public' && !gated;
+  if (hasRole(actor.roles, 'admin')) return true;
+  const isHost = e.hostId === actor.sub || e.coHostIds.includes(actor.sub);
+  const isManager = e.venueId ? hasRole(actor.roles, 'venue_manager', 'venue:' + e.venueId) : false;
+  if (isHost || isManager) return true;
+  if (gated || e.visibility === 'private') return false;
+  return true; // 'members' or 'public', signed in
+}
+
+export async function listEvents(
+  query: {
+    view?: 'day' | 'week' | 'list';
+    venue?: string;
+    program?: string;
+    tag?: string;
+    from?: Date;
+    to?: Date;
+  },
+  actor: SessionPayload | null = null,
+) {
   const rows = await db.select().from(events).orderBy(events.startAt);
   const from = query.from;
   const to = query.to;
   return rows.filter((e) => {
+    if (!canSeeEvent(e, actor)) return false;
     if (query.venue && e.venueId !== query.venue) return false;
     if (query.program && e.programId !== query.program) return false;
     if (query.tag && !e.tags.includes(query.tag)) return false;
     if (from && e.endAt < from) return false;
     if (to && e.startAt > to) return false;
-    // list view shows everything incl. drafts of the caller? public listing only
-    if (query.view !== 'list' && e.status === 'draft') return false;
-    if (query.view !== 'list' && e.status === 'pending_review') return false;
     return true;
   });
 }
 
-export async function getEvent(eventId: string) {
+export async function getEvent(eventId: string, actor: SessionPayload | null = null) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw notFound('Event not found');
+  // Hidden events are indistinguishable from missing ones to unprivileged callers.
+  if (!canSeeEvent(event, actor)) throw notFound('Event not found');
   const venue = event.venueId ? await loadVenueSummary(event.venueId) : null;
   const regs = await db.select().from(registrations).where(eq(registrations.eventId, eventId));
   const [host] = await db.select().from(members).where(eq(members.id, event.hostId)).limit(1);
@@ -470,7 +495,9 @@ export async function rotateCheckin(eventId: string, actor: SessionPayload) {
   return { token: row, rotation: previous.length + 1 };
 }
 
-export async function getActiveCheckinToken(eventId: string) {
+/** The live rotating check-in URL is the door key — host/manager only. */
+export async function getActiveCheckinToken(eventId: string, actor: SessionPayload) {
+  await loadEventForWrite(eventId, actor);
   const rows = await db
     .select()
     .from(checkinTokens)
@@ -495,7 +522,7 @@ export async function claimCheckin(eventId: string, input: { tokenId: string; si
 
   // The claimer must be a registered attendee.
   const regs = await db.select().from(registrations).where(and(eq(registrations.eventId, eventId), eq(registrations.memberId, actor.sub)));
-  const registration = regs.find((r) => ['approved', 'pending'].includes(r.status)) ?? regs[0];
+  const registration = regs.find((r) => ['approved', 'pending'].includes(r.status));
   if (!registration) throw forbidden('You are not registered for this event');
 
   // Claim cap: checkin_claim_cap ?? venue capacity ?? event capacity (docs/03 §4.4).
