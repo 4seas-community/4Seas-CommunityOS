@@ -67,3 +67,5 @@ wrangler-state/
 
 # local env
 .env
+
+.deploy/
