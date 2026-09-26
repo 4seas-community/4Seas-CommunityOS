@@ -9,6 +9,8 @@ import { syncRecords, type SyncRecord } from './schema';
 import { events } from '../event/schema';
 import { venues, buildings, floors } from '../place/schema';
 import * as notify from '../notify/service';
+import { publishEvent as publishToLuma } from './luma/sync';
+import { publishEvent as publishToSola } from './social-layer/sync';
 
 /** Create/refresh pending sync rows for an entity (called on publish). */
 export async function markSyncPending(entityType: 'event' | 'venue', entityId: string, platforms: Array<'luma' | 'social_layer'>) {
@@ -80,4 +82,21 @@ export async function botNotificationsFeed(since?: Date) {
 export async function ackNotification(id: string, body: { delivered?: boolean; error?: string }) {
   if (body.error) return notify.markFailed(id, body.error);
   return notify.markDelivered(id);
+}
+
+/**
+ * Outbox processor (docs/04 §1): publish every pending sync record to its
+ * platform. Idempotent — safe to run on a schedule (cron / queue consumer).
+ */
+export async function processPendingSyncs(): Promise<{ processed: number; failed: number }> {
+  const pending = await db.select().from(syncRecords).where(eq(syncRecords.status, 'pending'));
+  let processed = 0;
+  let failed = 0;
+  for (const row of pending) {
+    if (row.entityType !== 'event') continue;
+    const result = row.platform === 'luma' ? await publishToLuma(row.entityId) : await publishToSola(row.entityId);
+    processed += 1;
+    if (result.status !== 'synced') failed += 1;
+  }
+  return { processed, failed };
 }

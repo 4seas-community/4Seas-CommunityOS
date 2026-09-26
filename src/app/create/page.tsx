@@ -6,6 +6,8 @@ interface VenueOption {
   building: { name: string } | null;
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function CreateEventPage() {
   let venues: VenueOption[] = [];
   try {
@@ -14,40 +16,53 @@ export default async function CreateEventPage() {
   } catch {
     venues = [];
   }
+
   return (
-    <section>
-      <h1>Create event</h1>
-      <p className="muted">
-        Quick create needs only a title, a time and a venue. Full fields are available via the API and the Telegram bot.
+    <section style={{ maxWidth: 640 }}>
+      <h1>Create an event</h1>
+      <p className="page-sub">
+        Three fields is enough to start — title, time and place. You can enrich the details any time before publishing.
       </p>
+
       <div className="card">
         <form method="post" action="/api/events">
-          <label>Title</label>
-          <input name="title" required minLength={2} style={{ width: '100%' }} />
-          <label>Start (ISO, e.g. 2026-10-01T10:00:00+07:00)</label>
-          <input name="startAt" required style={{ width: '100%' }} />
-          <label>End (ISO)</label>
-          <input name="endAt" required style={{ width: '100%' }} />
-          <label>Venue (self-operated)</label>
-          <select name="venueId" style={{ width: '100%' }}>
-            <option value="">— external / online —</option>
+          <label htmlFor="title">Title</label>
+          <input id="title" name="title" required minLength={2} placeholder="e.g. Language Corner" />
+
+          <label htmlFor="startAt">Starts</label>
+          <input id="startAt" name="startAt" required placeholder="2026-10-01T10:00:00+07:00" />
+
+          <label htmlFor="endAt">Ends</label>
+          <input id="endAt" name="endAt" required placeholder="2026-10-01T12:00:00+07:00" />
+
+          <label htmlFor="venueId">Venue</label>
+          <select id="venueId" name="venueId">
+            <option value="">— online / external location —</option>
             {venues.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name} {v.building ? '· ' + v.building.name : ''}
               </option>
             ))}
           </select>
-          <label>Tags (comma separated)</label>
-          <input name="tags" placeholder="workshop, community" style={{ width: '100%' }} />
-          <div style={{ marginTop: 12 }}>
-            <button type="submit">Create draft</button>
+
+          <label htmlFor="tags">Tags</label>
+          <input id="tags" name="tags" placeholder="workshop, community" />
+
+          <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
+            <button type="submit" className="btn btn-primary">
+              Create draft
+            </button>
+            <a href="/events" className="btn btn-ghost">
+              Cancel
+            </a>
           </div>
         </form>
       </div>
-      <p className="muted">
-        After creating a draft, publish it with POST /api/events/:id/publish — that triggers Luma/Social Layer sync and
-        notifications.
-      </p>
+
+      <div className="notice notice-info">
+        Your draft stays private until you publish it. Publishing notifies the community and syncs the event to Luma and
+        Social Layer automatically.
+      </div>
     </section>
   );
 }

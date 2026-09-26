@@ -14,6 +14,8 @@ interface MeBundle {
   points: { balance: number };
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function MePage() {
   let bundle: MeBundle = { member: null, points: { balance: 0 } };
   try {
@@ -21,43 +23,74 @@ export default async function MePage() {
   } catch {
     bundle = { member: null, points: { balance: 0 } };
   }
+
   if (!bundle.member) {
     return (
-      <section>
+      <section style={{ maxWidth: 480 }}>
         <h1>Sign in</h1>
-        <p className="muted">Email registration and verification are handled by this system.</p>
+        <p className="page-sub">Email registration and verification are handled right here — no password needed.</p>
         <div className="card">
           <form method="post" action="/api/auth/login/request">
-            <label>Email</label>
-            <input name="email" type="email" required style={{ width: '100%' }} />
-            <div style={{ marginTop: 12 }}>
-              <button type="submit">Send login link</button>
+            <label htmlFor="email">Email</label>
+            <input id="email" name="email" type="email" required placeholder="you@example.com" />
+            <div style={{ marginTop: 18 }}>
+              <button type="submit" className="btn btn-primary">
+                Send login link
+              </button>
             </div>
           </form>
         </div>
-        <p className="muted">
-          New here? POST /api/auth/register with your email — we send a verification link first.
-        </p>
+        <div className="notice notice-info">
+          New here? Your first sign-in creates the account — we email you a verification link to confirm it&rsquo;s you.
+        </div>
       </section>
     );
   }
+
+  const m = bundle.member;
   return (
-    <section>
-      <h1>{bundle.member.displayName ?? bundle.member.email}</h1>
+    <section style={{ maxWidth: 720 }}>
+      <h1>{m.displayName ?? m.email}</h1>
+      <p className="page-sub">{m.email}</p>
+
       <div className="card">
-        <div className="muted">email: {bundle.member.email}</div>
-        <div className="muted">verified: {String(bundle.member.emailVerified)}</div>
-        <div className="muted">tier: {bundle.member.tier}</div>
-        <div className="muted">
-          telegram: {bundle.member.telegram?.bound ? '@' + (bundle.member.telegram.username ?? bundle.member.telegram) : 'not bound'}
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <div className="row" style={{ gap: 8 }}>
+            <span className={m.emailVerified ? 'badge badge-ok' : 'badge badge-danger'}>
+              {m.emailVerified ? '✓ Verified member' : '⚠ Email not verified'}
+            </span>
+            <span className="badge badge-brand">{m.tier}</span>
+            {m.roles.some((r) => r.role === 'admin') && <span className="badge">admin</span>}
+          </div>
+          <span className="points-pill">◈ {bundle.points.balance} pts</span>
         </div>
-        <div className="muted">wallet: {bundle.member.walletAddress ?? 'not linked (V2)'}</div>
-        <div>
-          points mirror: <strong>{bundle.points.balance}</strong> <span className="muted">(authority: CAS/on-chain)</span>
-        </div>
+
+        <hr className="divider" />
+
+        <dl style={{ margin: 0, display: 'grid', gap: 10 }}>
+          <div>
+            <dt className="muted">Telegram</dt>
+            <dd style={{ margin: 0 }}>
+              {m.telegram?.bound ? '@' + (m.telegram.username ?? m.telegram) : 'Not bound yet — bind it to get event reminders'}
+            </dd>
+          </div>
+          <div>
+            <dt className="muted">On-chain account</dt>
+            <dd style={{ margin: 0 }}>{m.walletAddress ?? 'Not linked (V2 — coming with on-chain points)'}</dd>
+          </div>
+          <div>
+            <dt className="muted">Points authority</dt>
+            <dd style={{ margin: 0 }} className="muted">
+              CAS / on-chain — this is a read-only mirror
+            </dd>
+          </div>
+        </dl>
       </div>
-      <form method="post" action="/api/auth/logout">
-        <button type="submit">Sign out</button>
+
+      <form method="post" action="/api/auth/logout" style={{ marginTop: 16 }}>
+        <button type="submit" className="btn btn-ghost">
+          Sign out
+        </button>
       </form>
     </section>
   );

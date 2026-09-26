@@ -1,46 +1,53 @@
 import { apiGet } from '../lib/api-client';
+import { EventCard, EmptyState, type EventCardData } from '../components/event-card';
 
-interface EventRow {
-  id: string;
-  title: string;
-  startAt: string;
-  endAt: string;
-  eventType: string;
-  visibility: string;
-  status: string;
-  tags: string[];
-  venue: { id: string; name: string; building?: { name: string } | null } | null;
-}
+export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  let events: EventRow[] = [];
+  let events: EventCardData[] = [];
   let error: string | null = null;
   try {
-    const res = await apiGet<{ events: EventRow[] }>('/api/events?view=list');
+    const res = await apiGet<{ events: EventCardData[] }>('/api/events?view=list');
     events = res.events ?? [];
   } catch (e) {
     error = (e as Error).message;
   }
+
+  const upcoming = events.filter((e) => new Date(e.endAt).getTime() > Date.now());
+
   return (
     <section>
-      <h1>Upcoming events</h1>
-      {error && <p className="muted">Could not load events: {error}</p>}
-      {!error && events.length === 0 && <p className="muted">No events yet.</p>}
-      {events.map((ev) => (
-        <div className="card" key={ev.id}>
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <a href={'/events/' + ev.id} style={{ fontWeight: 600 }}>
-              {ev.title}
-            </a>
-            <span className="muted">{new Date(ev.startAt).toLocaleString('en-GB')}</span>
-          </div>
-          <div className="muted">
-            {ev.venue ? ev.venue.name + (ev.venue.building ? ' · ' + ev.venue.building.name : '') : 'Online / external'}
-            {' · '}
-            {ev.tags.join(', ')}
-          </div>
+      <div className="hero">
+        <h1>What&rsquo;s happening at 4Seas</h1>
+        <p>
+          A community operating system for our buildings in Chiang Mai — discover events, book spaces, and
+          grow the community together.
+        </p>
+        <div className="hero-meta">
+          <span>{upcoming.length} upcoming events</span>
+          <span>Venues across Building F &amp; 4Seas Nimman</span>
+          <span>Members host, everyone joins</span>
         </div>
-      ))}
+      </div>
+
+      {error && <div className="notice notice-error">Could not load events: {error}</div>}
+
+      <div className="section-head">
+        <h2>Upcoming events</h2>
+        <a href="/events" className="muted">
+          View all →
+        </a>
+      </div>
+
+      {!error && upcoming.length === 0 && (
+        <EmptyState emoji="🌱" title="No events yet" hint="Be the first to host something — it takes 30 seconds." />
+      )}
+
+      <div className="stack">
+        {upcoming.slice(0, 8).map((ev) => (
+          <EventCard ev={ev} key={ev.id} />
+        ))}
+      </div>
     </section>
   );
 }

@@ -35,6 +35,18 @@ export function registerIntegrationRoutes(router: Router): void {
     });
   }, 'service');
 
+  /** Outbox processor trigger for cron / queue consumer. */
+  router.post('/v1/integrations/sync/run', async () => {
+    const result = await service.processPendingSyncs();
+    return json(result);
+  }, 'service');
+
+  /** Outbox processor trigger (cron / queue consumer). */
+  router.post('/v1/integrations/sync/run', async () => {
+    const result = await service.processPendingSyncs();
+    return json(result);
+  }, 'service');
+
   router.post('/v1/integrations/bot/notifications/:id/ack', async (req, ctx) => {
     const body = (await req.json().catch(() => ({}))) as { delivered?: boolean; error?: string };
     const row = await service.ackNotification(ctx.params.id, body);
