@@ -11,6 +11,7 @@ import { canSeeEventForTest, listEvents } from '../src/modules/event/service';
 import * as bookingService from '../src/modules/booking/service';
 import * as peopleService from '../src/modules/people/service';
 import { db } from '../src/lib/db';
+import { isBookingOverlap, isUniqueViolation } from '../src/lib/db/errors';
 import { bookings } from '../src/modules/booking/schema';
 import { seedCommunity, seedMember, seedVenue, sessionFor, bookingInput } from './helpers';
 import { sql } from 'drizzle-orm';
@@ -163,9 +164,13 @@ describe('booking visibility', () => {
     const again = await bookingService.createBooking(bookingInput(venue.id, start, end), session);
     expect(again.booking.status).toBe('approved');
 
-    // …but a direct concurrent insert for the same venue+time is rejected by the DB.
+    // …but a direct concurrent insert for the same venue+time is rejected by the DB
+    // (the overlap triggers RAISE(ABORT, 'booking_overlap') — the SQLite
+    // replacement for the old Postgres exclusion constraint).
     const other = await seedMember('guard2@test.dev');
     let code: string | undefined;
+    let message = '';
+    let caught: unknown;
     try {
       await db.insert(bookings).values({
         venueId: venue.id,
@@ -180,8 +185,16 @@ describe('booking visibility', () => {
         depositPoints: 0,
       });
     } catch (err) {
-      code = (err as { code?: string }).code ?? (err as { cause?: { code?: string } }).cause?.code;
+      caught = err;
+      const error = err as { code?: string; message?: string; cause?: { code?: string; message?: string } };
+      code = error.code ?? error.cause?.code;
+      // Drizzle wraps the driver error: the trigger message is on the cause.
+      message = [error.message, error.cause?.message].filter(Boolean).join(' | ');
     }
-    expect(code).toBe('23P01');
+    expect(message).toContain('booking_overlap');
+    expect(code).toBe('ERR_SQLITE_ERROR');
+    // The service layer must map exactly this error shape to a 409.
+    expect(isBookingOverlap(caught)).toBe(true);
+    expect(isUniqueViolation(caught)).toBe(false);
   });
 });

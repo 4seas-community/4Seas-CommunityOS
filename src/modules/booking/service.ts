@@ -2,13 +2,14 @@
  * Booking service — one rule engine for both entry points (docs/02 §5.3):
  *   1. event-linked bookings (created automatically with an event)
  *   2. standalone bookings
- * Conflict detection includes the venue buffer (docs/03 §4.2); the database
- * exclusion constraint is the atomic guard, this is the friendly pre-check.
+ * Conflict detection includes the venue buffer (docs/03 §4.2); the SQLite
+ * overlap triggers are the atomic guard, this is the friendly pre-check.
  * Points are reserved in the schema but default to 0 (docs/02 D6, docs/03 §4.3).
  */
 import { and, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../lib/db';
+import { isBookingOverlap, isUniqueViolation } from '../../lib/db/errors';
 import { config } from '../../lib/config';
 import { bookings, ACTIVE_BOOKING_STATUSES, type Booking } from './schema';
 import { venues, venueRules, buildings, type Venue, type VenueRule } from '../place/schema';
@@ -45,7 +46,19 @@ export interface ValidationResult {
 
 /** Pure-ish validation pipeline; throws friendly ApiErrors (docs/03 §4.1/§4.2). */
 export async function validateBookingRequest(
-  input: { venueId: string; startAt: Date; endAt: Date; attendeesCount: number; acceptedProhibited?: boolean; eventId?: string | null },
+  input: {
+    venueId: string;
+    startAt: Date;
+    endAt: Date;
+    attendeesCount: number;
+    acceptedProhibited?: boolean;
+    eventId?: string | null;
+    /**
+     * Tags of an event row that does not exist yet: event creation validates
+     * before the atomic batch inserts anything (docs/10 §5).
+     */
+    eventTags?: string[];
+  },
   actor: { id: string; emailVerified: boolean },
   exec: typeof db = db,
 ): Promise<ValidationResult> {
@@ -73,9 +86,12 @@ export async function validateBookingRequest(
   }
 
   // Event type whitelist (docs/02 §5.1) — categories live on event tags.
-  if (rule && rule.allowedEventTypes.length > 0 && input.eventId) {
-    const [event] = await exec.select().from(events).where(eq(events.id, input.eventId)).limit(1);
-    const tags = event?.tags ?? [];
+  if (rule && rule.allowedEventTypes.length > 0 && (input.eventId || input.eventTags)) {
+    const tags =
+      input.eventTags ??
+      (input.eventId
+        ? (await exec.select().from(events).where(eq(events.id, input.eventId)).limit(1))[0]?.tags ?? []
+        : []);
     if (!tags.some((t) => rule.allowedEventTypes.includes(t))) {
       throw unprocessable('Event type not allowed at this venue', {
         allowed: rule.allowedEventTypes,
@@ -237,7 +253,10 @@ export async function createBooking(input: BookingCreateInput, actor: SessionPay
       })
       .returning();
   } catch (err) {
-    if (isUniqueViolation(err)) {
+    // The pre-check above is friendly; these two are the race-proof backs
+    // (overlap triggers, or a unique index), and Drizzle hides the driver
+    // message on `cause`.
+    if (isBookingOverlap(err) || isUniqueViolation(err)) {
       throw conflict('Venue already booked in this time range (incl. buffer)', {});
     }
     throw err;
@@ -260,21 +279,6 @@ async function loadMember(memberId: string) {
   const [m] = await db.select().from(members).where(eq(members.id, memberId)).limit(1);
   if (!m) throw notFound('Member not found');
   return m;
-}
-
-/**
- * 23505 = unique_violation, 23P01 = exclusion_violation (the tstzrange overlap
- * guard on bookings — see drizzle/0001_booking_exclusion_constraint.sql).
- */
-function isUniqueViolation(err: unknown): boolean {
-  // Drizzle wraps driver errors (DrizzleQueryError), so the Postgres code can be
-  // on the error itself or on its cause.
-  for (const candidate of [err, (err as { cause?: unknown } | null)?.cause]) {
-    if (typeof candidate !== 'object' || candidate === null) continue;
-    const code = (candidate as { code?: string }).code;
-    if (code === '23505' || code === '23P01') return true;
-  }
-  return false;
 }
 
 /** Single-booking fetch used by the route layer (which decides visibility). */

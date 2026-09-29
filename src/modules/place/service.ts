@@ -90,7 +90,7 @@ export async function createVenue(input: VenueCreateInput, actor: SessionPayload
   requireRole(actor, 'admin');
   const [created] = await db
     .insert(venues)
-    .values({ ...input, areaSqm: input.areaSqm == null ? null : String(input.areaSqm) })
+    .values({ ...input, areaSqm: input.areaSqm ?? null })
     .returning();
   await writeAudit({
     actorType: 'user',
@@ -111,7 +111,7 @@ export async function updateVenue(venueId: string, input: Partial<VenueCreateInp
     .update(venues)
     .set({
       ...rest,
-      ...(areaSqm === undefined ? {} : { areaSqm: areaSqm == null ? null : String(areaSqm) }),
+      ...(areaSqm === undefined ? {} : { areaSqm: areaSqm ?? null }),
       updatedAt: new Date(),
     })
     .where(eq(venues.id, venueId))

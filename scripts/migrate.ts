@@ -1,15 +1,17 @@
 /**
- * Apply database migrations. In dev this pushes the Drizzle schema directly;
- * for production, generate SQL migrations with `pnpm db:generate` and apply them
- * with your migration tool of choice.
+ * Apply the SQLite migrations to the LOCAL database file (dev / tests).
+ *
+ * Production is Cloudflare D1 and is migrated with wrangler:
+ *
+ *   wrangler d1 migrations apply 4seas-communityos --remote
  */
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { db, pool } from '../src/lib/db';
+import { closeDb } from '../src/lib/db';
+import { applyLocalMigrations } from '../src/lib/db/migrate-local';
 
 async function main() {
-  await migrate(db, { migrationsFolder: 'drizzle' });
-  console.log('[db] migrations applied');
-  await pool.end();
+  const count = await applyLocalMigrations();
+  console.log(count === 0 ? '[db] migrations already up to date' : '[db] applied ' + count + ' migration(s)');
+  closeDb();
 }
 
 main().catch((err) => {

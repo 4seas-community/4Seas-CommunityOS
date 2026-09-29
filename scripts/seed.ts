@@ -5,7 +5,7 @@
  *   pnpm seed
  */
 import { eq } from 'drizzle-orm';
-import { db, pool } from '../src/lib/db';
+import { closeDb, db } from '../src/lib/db';
 import { buildings, communities, floors, venues, venueRules } from '../src/modules/place/schema';
 import { members } from '../src/modules/people/schema';
 import { events } from '../src/modules/event/schema';
@@ -63,7 +63,7 @@ async function main() {
       code: 'F1-EVENT',
       buildingId: f.id,
       floorId: floorF1.id,
-      areaSqm: '120',
+      areaSqm: 120,
       capacitySeated: 80,
       capacityStanding: 120,
       amenities: ['projector', 'sound_system', 'stage', 'wifi', 'ac'],
@@ -81,7 +81,7 @@ async function main() {
       code: 'F1-LIBRARY',
       buildingId: f.id,
       floorId: floorF1.id,
-      areaSqm: '60',
+      areaSqm: 60,
       capacitySeated: 30,
       capacityStanding: 40,
       amenities: ['whiteboard', 'wifi', 'ac'],
@@ -99,7 +99,7 @@ async function main() {
       code: 'NM1-COWORK',
       buildingId: nm.id,
       floorId: null,
-      areaSqm: '200',
+      areaSqm: 200,
       capacitySeated: 40,
       capacityStanding: 60,
       amenities: ['wifi', 'desks', 'whiteboard', 'kitchen'],
@@ -196,7 +196,7 @@ async function main() {
   }
 
   console.log('[seed] done');
-  await pool.end();
+  closeDb();
 }
 
 main().catch((err) => {

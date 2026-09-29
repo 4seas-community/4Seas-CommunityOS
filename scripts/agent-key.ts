@@ -6,7 +6,7 @@
  * The secret is printed once; only its SHA-256 lives in the database.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { db, pool } from '../src/lib/db';
+import { closeDb, db } from '../src/lib/db';
 import { agentKeys } from '../src/modules/agent/schema';
 
 async function main() {
@@ -21,7 +21,7 @@ async function main() {
   console.log('  scopes :', scopes.join(', '));
   console.log('  secret :', secret);
   console.log('\nStore the secret now — it cannot be recovered.');
-  await pool.end();
+  closeDb();
 }
 
 main().catch((err) => {

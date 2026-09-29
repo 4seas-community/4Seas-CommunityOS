@@ -127,7 +127,7 @@ function publicVenue(v: {
   floorId: string | null;
   name: string;
   code: string;
-  areaSqm: string | null;
+  areaSqm: number | null;
   capacitySeated: number | null;
   capacityStanding: number | null;
   amenities: string[];
@@ -141,7 +141,7 @@ function publicVenue(v: {
 }) {
   return {
     ...v,
-    areaSqm: v.areaSqm === null ? null : Number(v.areaSqm),
+    areaSqm: v.areaSqm,
     capacity: Math.max(v.capacitySeated ?? 0, v.capacityStanding ?? 0),
   };
 }

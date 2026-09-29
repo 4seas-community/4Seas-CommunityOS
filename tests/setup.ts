@@ -1,19 +1,19 @@
 /**
- * Test setup: load env, give every test a clean database.
+ * Test setup: one in-memory SQLite database per run, reset before each test.
  *
- * DATABASE_URL may point at the local docker Postgres (node-postgres over TCP)
- * or at a Neon database. Neon is reached over its HTTPS /sql endpoint here
- * because sandboxed/edge environments often block raw TCP to Postgres.
+ * No database server and no network: the schema is applied from drizzle/*.sql to
+ * node:sqlite, through the same driver the app uses locally (docs/10 §5 explains
+ * why Postgres/Neon went away).
  */
 import 'dotenv/config';
 import { beforeAll, beforeEach } from 'vitest';
+import { execRaw } from '../src/lib/db';
+import { applyLocalMigrations } from '../src/lib/db/migrate-local';
 
-// Tests run against an isolated database: TEST_DATABASE_URL wins over the
-// dev DATABASE_URL (local docker Postgres or the shared Neon dev database).
-if (process.env.TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-}
+// Must be set before the first query: the driver reads it when it resolves.
+process.env.DATABASE_FILE = ':memory:';
 
+/** Child tables first: foreign keys are enforced (PRAGMA foreign_keys = ON). */
 const TABLES = [
   'agent_drafts',
   'agent_keys',
@@ -35,38 +35,11 @@ const TABLES = [
   'members',
 ];
 
-const TRUNCATE_SQL = 'TRUNCATE ' + TABLES.join(', ') + ' RESTART IDENTITY CASCADE';
-
 beforeAll(async () => {
-  if (!process.env.TEST_DATABASE_URL && !process.env.DATABASE_URL) {
-    throw new Error('TEST_DATABASE_URL or DATABASE_URL is required for tests (see .env.example / docker-compose.yml)');
-  }
+  process.env.DATABASE_FILE = ':memory:';
+  await applyLocalMigrations();
 });
 
-/** Truncate via Neon HTTPS /sql (no TCP needed) or local pg over TCP. */
-async function truncateAll(): Promise<void> {
-  const url = process.env.DATABASE_URL ?? '';
-  if (url.includes('neon.tech')) {
-    const u = new URL(url);
-    const res = await fetch('https://' + u.host + '/sql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': url },
-      body: JSON.stringify({ query: TRUNCATE_SQL }),
-    });
-    if (!res.ok) throw new Error('truncate failed: ' + (await res.text()).slice(0, 200));
-    return;
-  }
-  const { Pool } = await import('pg');
-  const pool = new Pool({ connectionString: url || 'postgres://community:community@127.0.0.1:5433/communityos' });
-  const client = await pool.connect();
-  try {
-    await client.query(TRUNCATE_SQL);
-  } finally {
-    client.release();
-    await pool.end();
-  }
-}
-
 beforeEach(async () => {
-  await truncateAll();
+  for (const table of TABLES) await execRaw('DELETE FROM ' + table);
 });

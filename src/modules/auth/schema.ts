@@ -5,20 +5,22 @@
  * registration and verification itself; CAS is the extension layer for on-chain
  * account mapping, points authority, check-in tokens and NFT records.
  */
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { idPk, oneOf, tsAt, tsNow, tsOpt } from '../../lib/db/sqlite';
 
 export const authTokenPurpose = ['verify_email', 'login'] as const;
+export type AuthTokenPurpose = (typeof authTokenPurpose)[number];
 
-export const authTokens = pgTable('auth_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const authTokens = sqliteTable('auth_tokens', {
+  id: idPk(),
   email: text('email').notNull(),
-  purpose: text('purpose').$type<(typeof authTokenPurpose)[number]>().notNull(),
+  purpose: text('purpose').$type<AuthTokenPurpose>().notNull(),
   /** SHA-256 of the opaque token; the raw token only ever exists in the email. */
   tokenHash: text('token_hash').notNull().unique(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  consumedAt: timestamp('consumed_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+  expiresAt: tsAt('expires_at'),
+  consumedAt: tsOpt('consumed_at'),
+  createdAt: tsNow('created_at'),
+}, (t) => [check('auth_tokens_purpose_check', oneOf(t.purpose, authTokenPurpose))]);
 
 export type AuthToken = typeof authTokens.$inferSelect;
 export type NewAuthToken = typeof authTokens.$inferInsert;

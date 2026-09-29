@@ -58,7 +58,7 @@ describe('event lifecycle', () => {
     const outbox = await db
       .select()
       .from(notificationOutbox)
-      .where(sql<string>`${notificationOutbox.payload} ->> 'eventId' = ${event.id}`);
+      .where(sql<string>`json_extract(${notificationOutbox.payload}, '$.eventId') = ${event.id}`);
     expect(outbox.length).toBeGreaterThan(0);
 
     // registration

@@ -5,7 +5,7 @@ interface VenueRow {
   id: string;
   name: string;
   code: string;
-  areaSqm: string | null;
+  areaSqm: number | null;
   capacitySeated: number | null;
   capacityStanding: number | null;
   amenities: string[];

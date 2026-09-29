@@ -2,28 +2,35 @@
  * Audit log table — every write operation (human / agent / service) is recorded.
  * Source of truth: docs/03-domain-model.md §2.5 (AuditLog) + §4.5.
  */
-import { pgTable, uuid, text, jsonb, timestamp, pgEnum, index } from 'drizzle-orm/pg-core';
+import { check, index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { enumOf, idPk, jsonOpt, oneOf, tsNow } from './sqlite';
 
-export const auditActorType = pgEnum('audit_actor_type', ['user', 'agent', 'service', 'system', 'anonymous']);
+export const auditActorTypeValues = ['user', 'agent', 'service', 'system', 'anonymous'] as const;
+export const auditActorType = enumOf(auditActorTypeValues);
+export type AuditActorType = (typeof auditActorType.enumValues)[number];
 
-export const auditLogs = pgTable(
+export const auditLogs = sqliteTable(
   'audit_logs',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    actorType: auditActorType('actor_type').notNull().default('anonymous'),
+    id: idPk(),
+    actorType: text('actor_type').$type<AuditActorType>().notNull().default('anonymous'),
     actorId: text('actor_id'),
     action: text('action').notNull(),
     entityType: text('entity_type'),
     entityId: text('entity_id'),
-    before: jsonb('before').$type<Record<string, unknown> | null>(),
-    after: jsonb('after').$type<Record<string, unknown> | null>(),
+    before: jsonOpt<Record<string, unknown> | null>('before'),
+    after: jsonOpt<Record<string, unknown> | null>('after'),
     /** Agent draft id when the write came from a draft+confirm flow (docs/03 §4.5). */
     draftId: text('draft_id'),
     ip: text('ip'),
     ua: text('ua'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: tsNow('created_at'),
   },
-  (t) => [index('audit_logs_created_at_idx').on(t.createdAt), index('audit_logs_entity_idx').on(t.entityType, t.entityId)],
+  (t) => [
+    index('audit_logs_created_at_idx').on(t.createdAt),
+    index('audit_logs_entity_idx').on(t.entityType, t.entityId),
+    check('audit_logs_actor_type_check', oneOf(t.actorType, auditActorTypeValues)),
+  ],
 );
 
 export type AuditLog = typeof auditLogs.$inferSelect;

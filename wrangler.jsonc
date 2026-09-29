@@ -8,6 +8,14 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "4seas-communityos",
+      "database_id": "12ec9cbb-8949-476a-b8a4-efd740e1e19f",
+      "migrations_dir": "drizzle"
+    }
+  ],
   "vars": {
     "APP_URL": "https://4seas-communityos.pages.dev"
   }
