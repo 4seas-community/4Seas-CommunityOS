@@ -16,6 +16,8 @@ import * as service from './service';
 import * as notifyService from '../notify/service';
 import * as agentService from '../agent/service';
 import * as exportModule from './export';
+import * as auditModule from './audit';
+import { auditActorTypeValues, type AuditActorType } from '../../lib/db/audit-schema';
 import { outboxStatusValues, type OutboxStatus, notificationChannelValues, type NotificationChannel } from '../notify/schema';
 import { requireRole } from '../../lib/auth/roles';
 import { writeAudit } from '../../lib/audit';
@@ -203,5 +205,44 @@ export function registerAdminRoutes(router: Router): void {
         },
       },
     );
+  });
+
+  router.get('/api/admin/audit', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    requireRole(session, 'admin');
+
+    const url = new URL(req.url);
+    const actor = url.searchParams.get('actor') || undefined;
+    const actorTypeParam = url.searchParams.get('actorType');
+    const actorType = actorTypeParam && (auditActorTypeValues as readonly string[]).includes(actorTypeParam)
+      ? (actorTypeParam as AuditActorType)
+      : undefined;
+    const action = url.searchParams.get('action') || undefined;
+    const entityType = url.searchParams.get('entityType') || undefined;
+    const entityId = url.searchParams.get('entityId') || undefined;
+    const fromRaw = url.searchParams.get('from');
+    const from = fromRaw ? new Date(fromRaw) : undefined;
+    const toRaw = url.searchParams.get('to');
+    const to = toRaw ? new Date(toRaw) : undefined;
+    const limitRaw = url.searchParams.get('limit');
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    const cursor = url.searchParams.get('cursor') || undefined;
+
+    const result = await auditModule.listAuditLogs(
+      {
+        actorType,
+        actorId: actor,
+        action,
+        entityType,
+        entityId,
+        from: from && !isNaN(from.getTime()) ? from : undefined,
+        to: to && !isNaN(to.getTime()) ? to : undefined,
+        limit: limit && !isNaN(limit) ? limit : undefined,
+        cursor,
+      },
+      session,
+    );
+
+    return json(result);
   });
 }

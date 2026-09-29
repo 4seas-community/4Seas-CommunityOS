@@ -100,6 +100,10 @@ pnpm cf:build && pnpm cf:stage && pnpm cf:deploy
 | #24 | **一键登录修复**:会话 cookie 必须由浏览器接收(服务端 fetch 会丢掉 Set-Cookie) |
 | #25 | 登录失败不再静默:cookie 未保留 / 链接失效 / 邮箱格式错 都有明确文案 |
 | #26 | 邮件品牌改为 **4Seas Community**(4Seas logo 抬头,iDoris 仅页脚一行),并堵掉浏览器看到裸 JSON |
+| #27 | Admin 2.3: 通知发送记录与失败重试界面 (`/admin/notifications`),PII 访问控制 |
+| #28 | Admin 2.4: Agent Key 管理界面 (`/admin/agent-keys`),一次性回显、吊销即刻生效 |
+| #29 | Admin 2.5: 数据导出 (CSV/JSON) 引擎与页面 (`/admin/export`),RFC 4180、BOM、CRLF |
+| #30 | Admin 2.6: 审计日志查询 API 与界面 (`/admin/audit`),复合游标分页、操作者信息补全 |
 
 ### 一键登录(容易踩坑,务必理解)
 
@@ -150,7 +154,7 @@ pnpm cf:build && pnpm cf:stage && pnpm cf:deploy
   时间统一 ISO 8601;大数据量下考虑流式或分页上限。
 - **注意**:导出的可见范围必须与 API 权限一致(建议仅 community admin 可导出全量)。
 
-### 2.6 审计日志查询 + 界面
+### 2.6 审计日志查询 + 界面 ✅ (已完成)
 
 - **现状**:表 `audit_logs`;`src/lib/audit.ts` 的 `writeAudit`;
   `src/lib/http.ts` 的路由中间件已自动记录**所有成功写操作**(actorType/actorId/action/entity/draftId/ip/ua)。

@@ -139,17 +139,20 @@ export default async function AdminPage() {
             </p>
           </Link>
         )}
+        {isCommunityAdmin(member) && (
+          <Link className="card" href="/admin/audit" style={{ display: 'block' }}>
+            <h3>Audit logs</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Inspect immutable mutation records, diff snapshots, operator actions, and IP traces.
+            </p>
+          </Link>
+        )}
         <Link className="card" href="/venues" style={{ display: 'block' }}>
           <h3>Public venue list</h3>
           <p className="muted" style={{ margin: 0 }}>
             What members see when they browse spaces.
           </p>
         </Link>
-      </div>
-
-      <div className="notice notice-info" style={{ marginTop: 20 }}>
-        Still to come from the batch 2 plan: the audit-log viewer
-        (docs/10-gap-analysis.md §3).
       </div>
     </section>
   );

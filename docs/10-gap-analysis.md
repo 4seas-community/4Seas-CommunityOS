@@ -54,7 +54,7 @@
 - [x] 2.3 通知发送记录界面 —— `GET /api/admin/notifications` + `/admin/notifications` 页面(状态/渠道/模板过滤 + PII admin 门控 + 重试 + 审计)
 - [x] 2.4 Agent key 管理界面 —— `GET/POST /api/admin/agent-keys` + `DELETE /api/admin/agent-keys/:id` + `/admin/agent-keys` 页面(一次性回显明文/按需吊销/安全无hash回显/写审计)
 - [x] 2.5 数据导出(CSV/JSON):活动、预订、场地、成员 —— `GET /api/admin/export` + `/admin/export` 页面(CSV RFC 4180/BOM/CRLF/ISO 8601/JSON 导出/Admin门控)
-- [ ] 2.6 审计日志查询接口与界面
+- [x] 2.6 审计日志查询接口与界面 —— `GET /api/admin/audit` + `/admin/audit` 页面(组合游标分页/操作者与变更JSON详情展开/PII Admin门控)
 
 ## 4. 进度跟踪
 
@@ -65,7 +65,8 @@
 | 二 | 2.3 | ✅ 已交付(通知记录与重试 /admin/notifications) |
 | 二 | 2.4 | ✅ 已交付(Agent key 创建/吊销 /admin/agent-keys) |
 | 二 | 2.5 | ✅ 已交付(数据导出 CSV/JSON /admin/export) |
-| 二 | 2.6 | ⬜ 待做(规格与验收标准见 docs/11 §6) |
+| 二 | 2.6 | ✅ 已交付(审计日志查询与分页 /admin/audit) |
+| 二 | 全部 (2.1–2.6) | ✅ 全部交付完成，运营可见性完整闭环 |
 | 迁移 | Postgres/Neon → Cloudflare D1 | ✅ 已交付并线上验证(docs/08 §2) |
 | 邮件 | 事务邮件经 Resend(`hello@idoris.ai`)+ 4Seas 品牌 | ✅ 已交付(PR #22/#26,真机投递验证) |
 | 登录 | 邮箱一次性链接一键登录 | ✅ 已交付(PR #24/#25,含失败态诊断) |
