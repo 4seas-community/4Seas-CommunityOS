@@ -13,6 +13,10 @@ import { readJson, type Router } from '../../lib/http';
 import { json, unauthorized } from '../../lib/errors';
 import { z } from 'zod';
 import * as service from './service';
+import * as notifyService from '../notify/service';
+import { outboxStatusValues, type OutboxStatus, notificationChannelValues, type NotificationChannel } from '../notify/schema';
+import { requireRole } from '../../lib/auth/roles';
+import { writeAudit } from '../../lib/audit';
 import type { SessionPayload } from '../../lib/auth/session';
 
 function requireSession(s: SessionPayload | null): SessionPayload {
@@ -61,5 +65,48 @@ export function registerAdminRoutes(router: Router): void {
     const session = requireSession(ctx.session);
     const body = await readJson(req, pointsSchema);
     return json(await service.adjustPoints(ctx.params.id, body, session), 201, { 'x-audit-logged': '1' });
+  });
+
+  router.get('/api/admin/notifications', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    requireRole(session, 'admin');
+    const url = new URL(req.url);
+    const statusParam = url.searchParams.get('status');
+    const status = statusParam && (outboxStatusValues as readonly string[]).includes(statusParam)
+      ? (statusParam as OutboxStatus)
+      : undefined;
+    const channelParam = url.searchParams.get('channel');
+    const channel = channelParam && (notificationChannelValues as readonly string[]).includes(channelParam)
+      ? (channelParam as NotificationChannel)
+      : undefined;
+    const template = url.searchParams.get('template') || undefined;
+    const sinceRaw = url.searchParams.get('since');
+    const since = sinceRaw ? new Date(sinceRaw) : undefined;
+    const limitRaw = url.searchParams.get('limit');
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+
+    const notifications = await notifyService.listNotifications({
+      status,
+      channel,
+      template,
+      since: since && !isNaN(since.getTime()) ? since : undefined,
+      limit: limit && !isNaN(limit) ? limit : undefined,
+    });
+    return json({ notifications });
+  });
+
+  router.post('/api/admin/notifications/:id/retry', async (_req, ctx) => {
+    const session = requireSession(ctx.session);
+    requireRole(session, 'admin');
+    const updated = await notifyService.retryNotification(ctx.params.id);
+    await writeAudit({
+      actorType: 'user',
+      actorId: session.sub,
+      action: 'POST /api/admin/notifications/' + ctx.params.id + '/retry',
+      entityType: 'notification_outbox',
+      entityId: ctx.params.id,
+      after: { status: updated.status, lastError: updated.lastError },
+    });
+    return json({ notification: updated }, 200, { 'x-audit-logged': '1' });
   });
 }

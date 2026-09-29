@@ -5,8 +5,9 @@
  */
 import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { notificationOutbox, type NotificationOutbox } from './schema';
+import { notificationOutbox, type NotificationChannel, type NotificationOutbox, type OutboxStatus } from './schema';
 import { members } from '../people/schema';
+import { notFound } from '../../lib/errors';
 
 export interface EnqueueInput {
   memberId?: string | null;
@@ -76,3 +77,80 @@ export async function markFailed(id: string, error: string): Promise<Notificatio
 export async function recent(limit = 50): Promise<NotificationOutbox[]> {
   return db.select().from(notificationOutbox).orderBy(desc(notificationOutbox.createdAt)).limit(limit);
 }
+
+export interface ListNotificationsFilter {
+  status?: OutboxStatus;
+  template?: string;
+  channel?: NotificationChannel;
+  since?: Date;
+  limit?: number;
+}
+
+export interface NotificationWithMember extends NotificationOutbox {
+  member: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    telegramUsername: string | null;
+  } | null;
+}
+
+export async function listNotifications(
+  filter: ListNotificationsFilter = {},
+): Promise<NotificationWithMember[]> {
+  const conditions = [];
+  if (filter.status) conditions.push(eq(notificationOutbox.status, filter.status));
+  if (filter.template) conditions.push(eq(notificationOutbox.template, filter.template));
+  if (filter.channel) conditions.push(eq(notificationOutbox.channel, filter.channel));
+  if (filter.since) conditions.push(gte(notificationOutbox.createdAt, filter.since));
+
+  const limit = Math.min(100, Math.max(1, filter.limit ?? 50));
+
+  const rows = conditions.length > 0
+    ? await db
+        .select()
+        .from(notificationOutbox)
+        .where(and(...conditions))
+        .orderBy(desc(notificationOutbox.createdAt))
+        .limit(limit)
+    : await db
+        .select()
+        .from(notificationOutbox)
+        .orderBy(desc(notificationOutbox.createdAt))
+        .limit(limit);
+
+  const memberIds = [...new Set(rows.map((r) => r.memberId).filter(Boolean))] as string[];
+  const memberMap = new Map<string, { id: string; email: string; displayName: string | null; telegramUsername: string | null }>();
+  if (memberIds.length > 0) {
+    for (const m of await db.select().from(members).where(inArray(members.id, memberIds))) {
+      memberMap.set(m.id, {
+        id: m.id,
+        email: m.email,
+        displayName: m.displayName,
+        telegramUsername: m.telegramUsername,
+      });
+    }
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    member: r.memberId ? memberMap.get(r.memberId) ?? null : null,
+  }));
+}
+
+export async function retryNotification(id: string): Promise<NotificationOutbox> {
+  const [existing] = await db.select().from(notificationOutbox).where(eq(notificationOutbox.id, id)).limit(1);
+  if (!existing) throw notFound('Notification not found');
+
+  const [row] = await db
+    .update(notificationOutbox)
+    .set({
+      status: 'pending',
+      lastError: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(notificationOutbox.id, id))
+    .returning();
+  return row;
+}
+

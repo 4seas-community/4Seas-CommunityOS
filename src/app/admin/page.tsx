@@ -115,6 +115,14 @@ export default async function AdminPage() {
             Member directory, role grants and points adjustments.
           </p>
         </Link>
+        {isCommunityAdmin(member) && (
+          <Link className="card" href="/admin/notifications" style={{ display: 'block' }}>
+            <h3>Notification history</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Delivery log for emails and bot feeds, errors and retry queue.
+            </p>
+          </Link>
+        )}
         <Link className="card" href="/venues" style={{ display: 'block' }}>
           <h3>Public venue list</h3>
           <p className="muted" style={{ margin: 0 }}>
@@ -124,7 +132,7 @@ export default async function AdminPage() {
       </div>
 
       <div className="notice notice-info" style={{ marginTop: 20 }}>
-        Still to come from the batch 2 plan: notification send history, data export and the audit-log viewer
+        Still to come from the batch 2 plan: agent key management, data export and the audit-log viewer
         (docs/10-gap-analysis.md §3).
       </div>
     </section>
