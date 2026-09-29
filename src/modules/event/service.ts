@@ -221,6 +221,8 @@ export async function listEvents(
     venue?: string;
     program?: string;
     tag?: string;
+    /** One status or several (the admin review queue asks for pending_review). */
+    status?: string | string[];
     from?: Date;
     to?: Date;
   },
@@ -229,8 +231,10 @@ export async function listEvents(
   const rows = await db.select().from(events).orderBy(events.startAt);
   const from = query.from;
   const to = query.to;
+  const wantedStatus = query.status === undefined ? null : Array.isArray(query.status) ? query.status : [query.status];
   return rows.filter((e) => {
     if (!canSeeEvent(e, actor)) return false;
+    if (wantedStatus && !wantedStatus.includes(e.status)) return false;
     if (query.venue && e.venueId !== query.venue) return false;
     if (query.program && e.programId !== query.program) return false;
     if (query.tag && !e.tags.includes(query.tag)) return false;

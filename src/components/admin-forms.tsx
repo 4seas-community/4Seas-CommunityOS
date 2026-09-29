@@ -289,3 +289,57 @@ export function PointsAdjuster({ memberId, isAdmin }: { memberId: string; isAdmi
     </div>
   );
 }
+
+/** Admin/venue manager: decide a pending venue booking. */
+export function BookingDecision({ bookingId, canDecide }: { bookingId: string; canDecide: boolean }) {
+  const [note, setNote] = useState('');
+  const { call, error, ok, busy } = useAction();
+  return (
+    <div>
+      <div className="row" style={{ gap: 8 }}>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="note (optional)"
+          style={{ maxWidth: 240 }}
+        />
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy || !canDecide}
+          onClick={() => call('POST', '/api/bookings/' + bookingId + '/approve', { note: note || undefined }, 'Booking approved')}
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          disabled={busy || !canDecide}
+          onClick={() => call('POST', '/api/bookings/' + bookingId + '/reject', { note: note || undefined }, 'Booking rejected')}
+        >
+          Reject
+        </button>
+      </div>
+      {!canDecide && <div className="muted">You can see this request but not decide it.</div>}
+      <Feedback error={error} ok={ok} />
+    </div>
+  );
+}
+
+/** Admin/venue manager: approve a pending_review event, which publishes it. */
+export function EventApproval({ eventId }: { eventId: string }) {
+  const { call, error, ok, busy } = useAction();
+  return (
+    <div>
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={busy}
+        onClick={() => call('POST', '/api/events/' + eventId + '/approve', undefined, 'Event published')}
+      >
+        Approve &amp; publish
+      </button>
+      <Feedback error={error} ok={ok} />
+    </div>
+  );
+}

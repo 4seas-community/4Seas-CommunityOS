@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 interface Overview {
   members: { total: number; verified: number; admins: number; venueManagers: number };
   points: { accounts: number; totalBalance: number };
+  queues: { bookingsPending: number; eventsPendingReview: number; bookingsUpcoming: number };
 }
 
 export default async function AdminPage() {
@@ -27,12 +28,16 @@ export default async function AdminPage() {
     );
   }
 
+  // The counters are community-wide, so only an admin may read them; a venue
+  // manager still gets the queue pages linked below.
   let overview: Overview | null = null;
   let error: string | null = null;
-  try {
-    overview = await apiGet<Overview>('/api/admin/overview');
-  } catch (e) {
-    error = (e as Error).message;
+  if (isCommunityAdmin(member)) {
+    try {
+      overview = await apiGet<Overview>('/api/admin/overview');
+    } catch (e) {
+      error = (e as Error).message;
+    }
   }
 
   return (
@@ -70,6 +75,31 @@ export default async function AdminPage() {
       )}
 
       <div className="section-head">
+        <h2>Needs attention</h2>
+      </div>
+      <div className="card-grid">
+        <Link className="card" href="/admin/bookings" style={{ display: 'block' }}>
+          <h3>Booking requests</h3>
+          <p style={{ margin: '4px 0' }}>
+            <strong style={{ fontSize: 26 }}>{overview ? overview.queues.bookingsPending : '—'}</strong> pending
+          </p>
+          <p className="muted" style={{ margin: 0 }}>
+            Approve or reject, and see the next 14 days of occupancy per venue.
+          </p>
+        </Link>
+        <Link className="card" href="/admin/events" style={{ display: 'block' }}>
+          <h3>Event review</h3>
+          <p style={{ margin: '4px 0' }}>
+            <strong style={{ fontSize: 26 }}>{overview ? overview.queues.eventsPendingReview : '—'}</strong> awaiting
+            review
+          </p>
+          <p className="muted" style={{ margin: 0 }}>
+            Publish events whose venue rules ask for a human decision.
+          </p>
+        </Link>
+      </div>
+
+      <div className="section-head">
         <h2>Manage</h2>
       </div>
       <div className="card-grid">
@@ -94,8 +124,8 @@ export default async function AdminPage() {
       </div>
 
       <div className="notice notice-info" style={{ marginTop: 20 }}>
-        Booking approvals, event review queues, notification history and exports arrive in batch 2 of the gap
-        remediation plan (see docs/10-gap-analysis.md).
+        Still to come from the batch 2 plan: notification send history, data export and the audit-log viewer
+        (docs/10-gap-analysis.md §3).
       </div>
     </section>
   );
