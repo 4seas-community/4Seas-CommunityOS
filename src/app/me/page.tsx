@@ -17,7 +17,8 @@ interface MeBundle {
 
 export const dynamic = 'force-dynamic';
 
-export default async function MePage() {
+export default async function MePage({ searchParams }: { searchParams: Promise<{ login?: string }> }) {
+  const { login } = await searchParams;
   let bundle: MeBundle = { member: null, points: { balance: 0 } };
   try {
     bundle = await apiGet<MeBundle>('/api/me');
@@ -29,6 +30,15 @@ export default async function MePage() {
     return (
       <section style={{ maxWidth: 480 }}>
         <h1>Sign in</h1>
+        {login === 'failed' && (
+          <div className="notice notice-error">
+            That sign-in link had already been used or has expired (each link works once). Send yourself a new one
+            below.
+          </div>
+        )}
+        {login === 'link-sent' && (
+          <div className="notice notice-info">Check your inbox — a fresh sign-in link is on its way.</div>
+        )}
         <p className="page-sub">Email registration and verification are handled right here — no password needed.</p>
         <div className="card">
           <form method="post" action="/api/auth/login/request">
