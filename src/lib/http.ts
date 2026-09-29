@@ -77,11 +77,15 @@ export class Router {
         ? bearer !== '' && bearer === config.botFeedToken
         : false;
 
-    if (matched.auth === 'session' && !session) throw unauthorized();
-    if (matched.auth === 'service' && !service) throw unauthorized('Invalid or missing service token');
-    if (matched.auth === 'session-or-service' && !session && !service) throw unauthorized();
-
     try {
+      // Auth failures must render as JSON API errors too. Throwing these outside
+      // the try let them escape the router, and Next turns an uncaught error into
+      // an opaque 500 with an empty body — so an unauthenticated request looked
+      // like a server fault instead of a 401 (found while verifying D1 live).
+      if (matched.auth === 'session' && !session) throw unauthorized();
+      if (matched.auth === 'service' && !service) throw unauthorized('Invalid or missing service token');
+      if (matched.auth === 'session-or-service' && !session && !service) throw unauthorized();
+
       const res = await matched.handler(req, { params, url, session, service });
       // ---- audit middleware: record every successful write (docs/03 §4.5) ----
       const isWrite = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method);

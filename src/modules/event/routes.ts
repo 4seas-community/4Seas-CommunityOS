@@ -11,7 +11,7 @@
  *   GET  /api/events/{id}/check-in            (host: current QR)
  *   POST /api/events/{id}/check-in/claim      (participant: one-time claim URL)
  */
-import type { Router } from '../../lib/http';
+import { readJson, type Router } from '../../lib/http';
 import { json, unauthorized } from '../../lib/errors';
 import * as service from './service';
 import type { SessionPayload } from '../../lib/auth/session';
@@ -24,7 +24,7 @@ function requireSession(s: SessionPayload | null): SessionPayload {
 export function registerEventRoutes(router: Router): void {
   router.post('/api/events', async (req, ctx) => {
     const session = requireSession(ctx.session);
-    const input = service.eventCreateSchema.parse(await req.json().catch(() => ({})));
+    const input = await readJson(req, service.eventCreateSchema);
     const result = await service.createEvent(input, session);
     return json({ event: result.event, warnings: result.warnings }, 201, { 'x-audit-logged': '1' });
   });
