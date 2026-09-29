@@ -140,16 +140,20 @@
 
 ## 10. 下一步行动(2026-09-29 更新)
 
-**已完成**:M0 地基、M1 运营闭环、M2 分发与 Agent 的代码与测试;数据库迁移到 Cloudflare D1;
-事务邮件经 Resend;`/admin` 控制台第二批 2.1/2.2(审批队列与占用网格)。
+**已完成**:
+- M0 地基、M1 运营闭环、M2 分发与 Agent 的核心代码与测试(17 个测试文件,98 passed)。
+- 数据库无缝迁移到 Cloudflare D1,触发器替代 PG EXCLUDE,彻底解决 Neon 配额超标。
+- 事务邮件经 Resend(`hello@idoris.ai`)投递,品牌统一为 4Seas Community。
+- 邮箱一次性链接一键登录与状态诊断。
+- `/admin` 控制台第一批 1.1–1.6(建筑/楼层/场地、成员与角色、CAS积分镜像调整)。
+- `/admin` 控制台第二批 2.1–2.6(预订审批与占用网格、活动审批队列、通知日志与重试、Agent Key 管理、RFC 4180 数据导出、复合游标审计日志查询)。
+- 对照 docs/02 §3 与 docs/05 的全量范围复查(详见 docs/10 §4.1)。
 
-1. [进行中] **第二批 2.3 – 2.6**(运营可见性:通知记录、Agent key 管理、数据导出、审计日志)——
-   逐项规格与验收标准见 `docs/11-handoff.md` §6。
-2. [待办] 确认品牌名(4Seas Community 还是 Forty Community),一处环境变量即可切换。
-3. [待办] Luma 单向发布的真实对接(需 Luma Plus API key,见 docs/09)。
-4. [待办] Social Layer 服务账号 JWT 与真实同步(见 docs/04 §3、docs/09)。
-5. [待办] 4seas-bot 维护者合并适配器 PR(本系统侧 feed 已就绪)。
-6. [待办] CAS 真实部署与联调(Community-Account-System 仓库,docs/06)。
-7. [待办] 第二批结束后按 docs/02 §3 与本文档做一次全量范围复查。
+**后续开放与外部协同事项**:
+1. [待办] 确认品牌名(4Seas Community 还是 Forty Community),一处环境变量即可切换。
+2. [待办] Luma 单向发布的真实对接(需 Luma Plus API key,见 docs/09)。
+3. [待办] Social Layer 服务账号 JWT 与真实同步(见 docs/04 §3、docs/09)。
+4. [待办] 4seas-bot 维护者合并适配器 PR(本系统侧 feed 已就绪)。
+5. [待办] CAS 真实部署与联调(Community-Account-System 仓库,docs/06)。
 
 > 接手入口:`docs/11-handoff.md`(环境、命令、陷阱、文件地图)。
