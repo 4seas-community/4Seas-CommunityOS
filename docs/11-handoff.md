@@ -119,7 +119,7 @@ pnpm cf:build && pnpm cf:stage && pnpm cf:deploy
 > 页面用 `canUseAdmin`/`getCurrentMember` 门控,`apiGet` 读、客户端组件 `useAction` 写。
 > 全部完成后按 docs/10 §4 的要求做一次对照 docs/02 §3 与 docs/05 的全量复查。
 
-### 2.3 通知发送记录界面
+### 2.3 通知发送记录界面 ✅ (已完成)
 
 - **现状**:表 `notification_outbox`;service `src/modules/notify/service.ts`(`enqueue` 等);
   机器人拉取接口 `GET /v1/integrations/bot/notifications`(service token)。

@@ -343,3 +343,23 @@ export function EventApproval({ eventId }: { eventId: string }) {
     </div>
   );
 }
+
+/** Admin: reset a failed notification outbox entry to pending. */
+export function NotificationRetryButton({ id }: { id: string }) {
+  const { call, error, ok, busy } = useAction();
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        style={{ padding: '4px 10px', fontSize: 13 }}
+        disabled={busy}
+        onClick={() => call('POST', '/api/admin/notifications/' + id + '/retry', undefined, 'Queued for retry')}
+      >
+        {busy ? 'Retrying…' : 'Retry'}
+      </button>
+      <Feedback error={error} ok={ok} />
+    </div>
+  );
+}
+
