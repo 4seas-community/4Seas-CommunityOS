@@ -19,11 +19,22 @@ export default async function AdminPage() {
         <div className="notice notice-warn">
           You need a venue manager or community admin role to use the operations console.
         </div>
-        <p className="muted">
-          Signed in as {member?.email ?? 'nobody'}. An existing admin can grant roles from{' '}
-          <Link href="/admin/members">Members</Link>; on a fresh deployment run{' '}
-          <code>pnpm tsx scripts/make-admin.ts &lt;email&gt;</code>.
-        </p>
+        {!member ? (
+          <div className="card" style={{ marginTop: 16 }}>
+            <p style={{ margin: '0 0 14px' }}>
+              You are not signed in. Please sign in with an account that has admin privileges.
+            </p>
+            <Link href="/me" className="btn btn-primary">
+              Sign in to continue
+            </Link>
+          </div>
+        ) : (
+          <p className="muted" style={{ marginTop: 16 }}>
+            Signed in as <strong>{member.email}</strong>. An existing admin can grant roles from{' '}
+            <Link href="/admin/members">Members</Link>; on a fresh deployment run{' '}
+            <code>pnpm tsx scripts/make-admin.ts {member.email}</code>.
+          </p>
+        )}
       </section>
     );
   }

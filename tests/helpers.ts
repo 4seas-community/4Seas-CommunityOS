@@ -88,3 +88,9 @@ export function bookingInput(venueId: string, startAt: Date, endAt: Date): Booki
     eventId: null,
   };
 }
+
+export function nextWeekday10am(): Date {
+  const d = new Date(Date.now() + 24 * 3600 * 1000);
+  d.setUTCHours(3, 0, 0, 0); // 10:00 +07:00
+  return d;
+}

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { apiGet } from '../../lib/api-client';
 import { LoginForm } from '../../components/forms';
 
@@ -112,6 +113,22 @@ export default async function MePage({ searchParams }: { searchParams: Promise<{
           </div>
         </dl>
       </div>
+
+      {m.roles.some((r) => r.role === 'admin' || r.role === 'venue_manager') && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <strong style={{ fontSize: 16 }}>Operations Console</strong>
+              <p className="muted" style={{ margin: '4px 0 0' }}>
+                You have {m.roles.filter((r) => r.role === 'admin' || r.role === 'venue_manager').map((r) => r.role).join(', ')} access.
+              </p>
+            </div>
+            <Link href="/admin" className="btn btn-primary">
+              Open Admin ➜
+            </Link>
+          </div>
+        </div>
+      )}
 
       <form method="post" action="/api/auth/logout" style={{ marginTop: 16 }}>
         <button type="submit" className="btn btn-ghost">

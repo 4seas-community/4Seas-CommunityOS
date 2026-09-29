@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildRouter } from '../src/lib/app-router';
 import { signSession, SESSION_COOKIE } from '../src/lib/auth/session';
-import { seedCommunity, seedMember, seedVenue, sessionFor, bookingInput } from './helpers';
+import { seedCommunity, seedMember, seedVenue, sessionFor, bookingInput, nextWeekday10am } from './helpers';
 import * as eventService from '../src/modules/event/service';
 import * as bookingService from '../src/modules/booking/service';
 
@@ -71,11 +71,14 @@ describe('admin data export api', () => {
     const { venue } = await seedVenue(community.id);
     const session = sessionFor(admin.id, admin.roles as never);
 
+    const eventStart = nextWeekday10am();
+    const eventEnd = new Date(eventStart.getTime() + 2 * 3600_000);
+
     await eventService.createEvent(
       {
         title: 'Event with "quotes" and, commas',
-        startAt: new Date(Date.now() + 3600_000).toISOString(),
-        endAt: new Date(Date.now() + 7200_000).toISOString(),
+        startAt: eventStart.toISOString(),
+        endAt: eventEnd.toISOString(),
         timezone: 'Asia/Bangkok',
         eventType: 'in_person',
         venueId: venue.id,
@@ -130,14 +133,17 @@ describe('admin data export api', () => {
     const { venue } = await seedVenue(community.id);
     const session = sessionFor(admin.id, admin.roles as never);
 
-    const start = new Date(Date.now() + 86400_000);
-    const end = new Date(start.getTime() + 3600_000);
+    const start = nextWeekday10am();
+    const end = new Date(start.getTime() + 2 * 3600_000);
     await bookingService.createBooking(bookingInput(venue.id, start, end), session);
+
+    const eventStart = new Date(end.getTime() + 3600_000);
+    const eventEnd = new Date(eventStart.getTime() + 2 * 3600_000);
     await eventService.createEvent(
       {
         title: 'Exported Workshop',
-        startAt: new Date(Date.now() + 100_000_000).toISOString(),
-        endAt: new Date(Date.now() + 103_600_000).toISOString(),
+        startAt: eventStart.toISOString(),
+        endAt: eventEnd.toISOString(),
         timezone: 'Asia/Bangkok',
         eventType: 'in_person',
         venueId: venue.id,

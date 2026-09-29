@@ -19,12 +19,12 @@ const NAV = [
   { href: '/venues', label: 'Venues' },
   { href: '/create', label: 'Create' },
   { href: '/me', label: 'Me' },
+  { href: '/admin', label: 'Admin' },
 ];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // The Admin entry only appears for community admins / venue managers.
   const member = await getCurrentMember();
-  const nav = canUseAdmin(member) ? [...NAV, { href: '/admin', label: 'Admin' }] : NAV;
+  const isAdminUser = canUseAdmin(member);
   return (
     <html lang="en">
       <body>
@@ -37,9 +37,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </span>
             </Link>
             <nav className="site-nav" aria-label="Primary">
-              {nav.map((item) => (
-                <Link key={item.href} href={item.href}>
+              {NAV.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={item.href === '/admin' && isAdminUser ? { fontWeight: 600 } : undefined}
+                >
                   {item.label}
+                  {item.href === '/admin' && isAdminUser && (
+                    <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.8 }}>●</span>
+                  )}
                 </Link>
               ))}
             </nav>
@@ -51,9 +58,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </main>
 
         <footer className="site-footer">
-          <div className="container row" style={{ justifyContent: 'space-between' }}>
+          <div className="container row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <span>4Seas CommunityOS — Place · Event · People</span>
-            <span>Chiang Mai · Asia/Bangkok</span>
+            <div className="row" style={{ gap: 16, alignItems: 'center' }}>
+              <Link href="/admin" className="muted" style={{ textDecoration: 'underline' }}>
+                Admin Console
+              </Link>
+              <span>Chiang Mai · Asia/Bangkok</span>
+            </div>
           </div>
         </footer>
       </body>
