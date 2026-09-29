@@ -8,6 +8,7 @@
  */
 import type { Router } from '../../lib/http';
 import { configProblems, isDevelopment } from '../../lib/config';
+import { driverKind, queryRaw } from '../../lib/db';
 import { json, badRequest } from '../../lib/errors';
 import * as service from './service';
 
@@ -18,10 +19,19 @@ export function registerIntegrationRoutes(router: Router): void {
    */
   router.get('/v1/healthz', async () => {
     const problems = configProblems();
+    let database = 'unavailable';
+    try {
+      database = driverKind();
+      await queryRaw('select 1 as ok');
+      database += ' (reachable)';
+    } catch (err) {
+      problems.push('database probe failed: ' + (err as Error).message);
+    }
     return json(
       {
         ok: problems.length === 0,
         mode: isDevelopment ? 'development' : 'production',
+        database,
         problems,
       },
       problems.length === 0 ? 200 : 503,

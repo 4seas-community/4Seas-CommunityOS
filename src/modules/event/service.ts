@@ -4,7 +4,8 @@
  */
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { db, txDb } from '../../lib/db';
+import { db, getDb } from '../../lib/db';
+import { isBookingOverlap, isUniqueViolation } from '../../lib/db/errors';
 import { config } from '../../lib/config';
 import { events, registrations, checkinTokens, type Event, type Registration } from './schema';
 import { venues, venueRules, buildings, floors, communities } from '../place/schema';
@@ -71,101 +72,113 @@ export async function createEvent(input: EventCreateInput, actor: SessionPayload
   const startAt = new Date(input.startAt);
   const endAt = new Date(input.endAt);
 
-  // Build event + optional venue booking atomically.
-  // txDb is the WebSocket-pooled handle: interactive transactions need it
-  // (the stateless HTTP driver used for plain queries has no transactions).
-  const created = await txDb.transaction(async (tx) => {
-    // Community comes from the venue's building (single-community deployment).
-    let communityId: string | null = null;
-    if (input.venueId) {
-      const [v] = await tx.select().from(venues).where(eq(venues.id, input.venueId)).limit(1);
-      if (v) {
-        const [b] = await tx.select().from(buildings).where(eq(buildings.id, v.buildingId)).limit(1);
-        communityId = b?.communityId ?? null;
-      }
+  // Reads first, then a single atomic write batch.
+  //
+  // D1 has no interactive transactions, so `db.batch` replaces the old
+  // txDb.transaction: the event insert and the venue booking commit or roll back
+  // together, and the booking triggers raise 'booking_overlap' when the slot is
+  // taken — a rejected booking can never leave an orphaned event behind.
+  //
+  // Community comes from the venue's building (single-community deployment).
+  let communityId: string | null = null;
+  if (input.venueId) {
+    const [v] = await db.select().from(venues).where(eq(venues.id, input.venueId)).limit(1);
+    if (v) {
+      const [b] = await db.select().from(buildings).where(eq(buildings.id, v.buildingId)).limit(1);
+      communityId = b?.communityId ?? null;
     }
-    if (!communityId) {
-      const [c] = await tx.select().from(communities).limit(1);
-      communityId = c?.id ?? null;
-    }
-    if (!communityId) throw unprocessable('No community configured; run the seed script first');
+  }
+  if (!communityId) {
+    const [c] = await db.select().from(communities).limit(1);
+    communityId = c?.id ?? null;
+  }
+  if (!communityId) throw unprocessable('No community configured; run the seed script first');
 
-    const [event] = await tx
-      .insert(events)
-      .values({
-        communityId,
-        programId: input.programId ?? null,
-        title: input.title,
-        description: input.description,
+  // The id is generated up front so the booking can reference the event inside
+  // the same batch.
+  const eventId = crypto.randomUUID();
+  const eventValues: typeof events.$inferInsert = {
+    id: eventId,
+    communityId,
+    programId: input.programId ?? null,
+    title: input.title,
+    description: input.description,
+    startAt,
+    endAt,
+    timezone: input.timezone,
+    eventType: input.eventType,
+    venueId: input.venueId ?? null,
+    externalLocation: input.externalLocation ?? null,
+    transportInfo: input.transportInfo,
+    meetingUrl: input.meetingUrl ?? null,
+    bannerUrl: input.bannerUrl ?? null,
+    suggestedAttendees: input.suggestedAttendees ?? null,
+    maxCapacity: input.maxCapacity ?? null,
+    isPaid: input.isPaid,
+    priceInfo: input.priceInfo ?? null,
+    entryRequirements: input.entryRequirements,
+    registrationQuestions: input.registrationQuestions,
+    approvalRequired: input.approvalRequired,
+    waitlistEnabled: input.waitlistEnabled,
+    visibility: input.visibility,
+    tags: input.tags,
+    status: 'draft',
+    hostId: member.id,
+    coHostIds: input.coHostIds,
+    createdVia: 'web',
+    checkinMode: input.checkinMode,
+    checkinClaimCap: input.checkinClaimCap ?? null,
+  };
+
+  let bookingValues: typeof bookings.$inferInsert | null = null;
+  if (input.venueId) {
+    // Same rule engine as standalone bookings (docs/02 §5.3 "两个入口,一个引擎").
+    const validation = await bookingService.validateBookingRequest(
+      {
+        venueId: input.venueId,
         startAt,
         endAt,
-        timezone: input.timezone,
-        eventType: input.eventType,
-        venueId: input.venueId ?? null,
-        externalLocation: input.externalLocation ?? null,
-        transportInfo: input.transportInfo,
-        meetingUrl: input.meetingUrl ?? null,
-        bannerUrl: input.bannerUrl ?? null,
-        suggestedAttendees: input.suggestedAttendees ?? null,
-        maxCapacity: input.maxCapacity ?? null,
-        isPaid: input.isPaid,
-        priceInfo: input.priceInfo ?? null,
-        entryRequirements: input.entryRequirements,
-        registrationQuestions: input.registrationQuestions,
-        approvalRequired: input.approvalRequired,
-        waitlistEnabled: input.waitlistEnabled,
-        visibility: input.visibility,
-        tags: input.tags,
-        status: 'draft',
-        hostId: member.id,
-        coHostIds: input.coHostIds,
-        createdVia: 'web',
-        checkinMode: input.checkinMode,
-        checkinClaimCap: input.checkinClaimCap ?? null,
-      })
-      .returning();
+        attendeesCount: input.suggestedAttendees ?? input.maxCapacity ?? 1,
+        eventId,
+        eventTags: input.tags,
+        // Creating an event at a venue implies accepting that venue's rules
+        // (docs/02 §5.1 prohibited behaviors are surfaced on the create form).
+        acceptedProhibited: true,
+      },
+      { id: member.id, emailVerified: Boolean(member.emailVerifiedAt) },
+    );
+    const approvalMode = validation.rule?.approvalMode ?? 'auto';
+    const durationHours = (validation.buffered.end.getTime() - validation.buffered.start.getTime()) / 3600_000;
+    bookingValues = {
+      venueId: input.venueId,
+      eventId,
+      memberId: member.id,
+      purpose: 'event:' + input.title,
+      startAt: validation.buffered.start,
+      endAt: validation.buffered.end,
+      attendeesCount: input.suggestedAttendees ?? input.maxCapacity ?? 1,
+      status: approvalMode === 'auto' ? 'approved' : 'pending',
+      ruleVersion: validation.rule?.version ?? 1,
+      pointsCharged: bookingService.computePointsCharged(validation.rule, durationHours),
+      depositPoints: validation.rule?.depositPoints ?? 0,
+    };
+  }
 
-    if (input.venueId) {
-      // Same rule engine as standalone bookings (docs/02 §5.3 "两个入口,一个引擎").
-      const validation = await bookingService.validateBookingRequest(
-        {
-          venueId: input.venueId,
-          startAt,
-          endAt,
-          attendeesCount: input.suggestedAttendees ?? input.maxCapacity ?? 1,
-          eventId: event.id,
-          // Creating an event at a venue implies accepting that venue's rules
-          // (docs/02 §5.1 prohibited behaviors are surfaced on the create form).
-          acceptedProhibited: true,
-        },
-        { id: member.id, emailVerified: Boolean(member.emailVerifiedAt) },
-        tx as unknown as typeof db,
-      );
-      const approvalMode = validation.rule?.approvalMode ?? 'auto';
-      const durationHours = (validation.buffered.end.getTime() - validation.buffered.start.getTime()) / 3600_000;
-      try {
-        await tx.insert(bookings).values({
-          venueId: input.venueId,
-          eventId: event.id,
-          memberId: member.id,
-          purpose: 'event:' + event.title,
-          startAt: validation.buffered.start,
-          endAt: validation.buffered.end,
-          attendeesCount: input.suggestedAttendees ?? input.maxCapacity ?? 1,
-          status: approvalMode === 'auto' ? 'approved' : 'pending',
-          ruleVersion: validation.rule?.version ?? 1,
-          pointsCharged: bookingService.computePointsCharged(validation.rule, durationHours),
-          depositPoints: validation.rule?.depositPoints ?? 0,
-        });
-      } catch (err) {
-        if ((err as { code?: string }).code === '23505') {
-          throw conflict('Venue already booked in this time range (incl. buffer)', {});
-        }
-        throw err;
-      }
+  let created: Event;
+  try {
+    if (!bookingValues) {
+      [created] = await db.insert(events).values(eventValues).returning();
+    } else {
+      const [eventRows] = await getDb().batch([
+        db.insert(events).values(eventValues).returning(),
+        db.insert(bookings).values(bookingValues),
+      ]);
+      created = (eventRows as Event[])[0];
     }
-    return event;
-  });
+  } catch (err) {
+    if (isBookingOverlap(err)) throw conflict('Venue already booked in this time range (incl. buffer)', {});
+    throw err;
+  }
 
   await writeAudit({
     actorType: 'user',
@@ -427,7 +440,7 @@ export async function registerForEvent(eventId: string, memberId: string, answer
       .values({ eventId, memberId, status, answers, source })
       .returning();
   } catch (err) {
-    if ((err as { code?: string }).code === '23505') throw conflict('Already registered for this event');
+    if (isUniqueViolation(err)) throw conflict('Already registered for this event');
     throw err;
   }
 

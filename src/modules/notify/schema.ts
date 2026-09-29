@@ -2,31 +2,42 @@
  * Notify module schema — notification outbox consumed by 4seasbot (pull-based).
  * Source of truth: docs/03-domain-model.md §2.5 + docs/04-integrations.md §4.
  */
-import { pgTable, uuid, text, integer, jsonb, timestamp, pgEnum, index } from 'drizzle-orm/pg-core';
+import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { enumOf, idPk, jsonCol, nonNegative, oneOf, tsNow } from '../../lib/db/sqlite';
 import { members } from '../people/schema';
 
-export const notificationChannel = pgEnum('notification_channel', ['telegram', 'email']);
-export const outboxStatus = pgEnum('outbox_status', ['scheduled', 'pending', 'delivered', 'failed']);
+export const notificationChannelValues = ['telegram', 'email'] as const;
+export const notificationChannel = enumOf(notificationChannelValues);
+export type NotificationChannel = (typeof notificationChannel.enumValues)[number];
 
-export const notificationOutbox = pgTable(
+export const outboxStatusValues = ['scheduled', 'pending', 'delivered', 'failed'] as const;
+export const outboxStatus = enumOf(outboxStatusValues);
+export type OutboxStatus = (typeof outboxStatus.enumValues)[number];
+
+export const notificationOutbox = sqliteTable(
   'notification_outbox',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
+    id: idPk(),
     /** Null = broadcast to the community channel. */
-    memberId: uuid('member_id').references(() => members.id, { onDelete: 'cascade' }),
+    memberId: text('member_id').references(() => members.id, { onDelete: 'cascade' }),
     /** chat_id / telegram_id / email, or "broadcast" for community-wide pushes. */
     target: text('target').notNull().default('broadcast'),
-    channel: notificationChannel('channel').notNull().default('telegram'),
+    channel: text('channel').$type<NotificationChannel>().notNull().default('telegram'),
     template: text('template').notNull(),
-    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
-    scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull().defaultNow(),
-    status: outboxStatus('status').notNull().default('pending'),
+    payload: jsonCol<Record<string, unknown>>('payload'),
+    scheduledAt: tsNow('scheduled_at'),
+    status: text('status').$type<OutboxStatus>().notNull().default('pending'),
     retryCount: integer('retry_count').notNull().default(0),
     lastError: text('last_error'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: tsNow('created_at'),
+    updatedAt: tsNow('updated_at'),
   },
-  (t) => [index('notification_outbox_status_idx').on(t.status, t.scheduledAt)],
+  (t) => [
+    index('notification_outbox_status_idx').on(t.status, t.scheduledAt),
+    check('notification_outbox_channel_check', oneOf(t.channel, notificationChannelValues)),
+    check('notification_outbox_status_check', oneOf(t.status, outboxStatusValues)),
+    check('notification_outbox_retry_check', nonNegative(t.retryCount)),
+  ],
 );
 
 export type NotificationOutbox = typeof notificationOutbox.$inferSelect;

@@ -13,7 +13,6 @@ function bool(name: string, fallback: boolean): boolean {
 }
 
 export const config = {
-  databaseUrl: str('DATABASE_URL', 'postgres://community:community@127.0.0.1:5433/communityos'),
   appUrl: str('APP_URL', 'http://localhost:3000'),
   defaultTimezone: str('DEFAULT_TIMEZONE', 'Asia/Bangkok'),
   sessionSecret: str('SESSION_SECRET', 'dev-only-session-secret-change-me'),

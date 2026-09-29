@@ -9,7 +9,7 @@
  *   pnpm tsx scripts/make-admin.ts --list        # show current admins
  */
 import { eq } from 'drizzle-orm';
-import { db, pool } from '../src/lib/db';
+import { closeDb, db } from '../src/lib/db';
 import { members } from '../src/modules/people/schema';
 
 interface RoleEntry {
@@ -25,7 +25,7 @@ async function main() {
     const admins = rows.filter((m) => (m.roles as RoleEntry[]).some((r) => r.role === 'admin'));
     console.log('members:', rows.length, '| admins:', admins.length);
     for (const a of admins) console.log('  admin:', a.email, JSON.stringify(a.roles));
-    await pool.end();
+    closeDb();
     return;
   }
 
@@ -34,14 +34,14 @@ async function main() {
   if (!member) {
     console.error('no member with email ' + email + ' — they must register first');
     process.exitCode = 1;
-    await pool.end();
+    closeDb();
     return;
   }
 
   const roles = member.roles as RoleEntry[];
   if (roles.some((r) => r.role === 'admin' && r.scope === 'community:*')) {
     console.log(email + ' is already a community admin');
-    await pool.end();
+    closeDb();
     return;
   }
 
@@ -49,7 +49,7 @@ async function main() {
   await db.update(members).set({ roles: next, updatedAt: new Date() }).where(eq(members.id, member.id));
   console.log('✓ ' + email + ' is now a community admin');
   console.log('  roles:', JSON.stringify(next));
-  await pool.end();
+  closeDb();
 }
 
 main().catch((err) => {

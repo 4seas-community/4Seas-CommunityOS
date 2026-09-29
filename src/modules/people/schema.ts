@@ -7,17 +7,20 @@
  * casUserId + walletAddress are the mapping to blockchain accounts; points
  * mirror is read-only with CAS/on-chain as the authority (docs/03 §5).
  */
-import { pgTable, uuid, text, boolean, integer, jsonb, timestamp, pgEnum } from 'drizzle-orm/pg-core';
+import { check, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { enumOf, idPk, jsonCol, oneOf, tsNow, tsOpt } from '../../lib/db/sqlite';
 
-export const memberStatus = pgEnum('member_status', ['active', 'suspended']);
+export const memberStatusValues = ['active', 'suspended'] as const;
+export const memberStatus = enumOf(memberStatusValues);
+export type MemberStatus = (typeof memberStatus.enumValues)[number];
 
-export const members = pgTable('members', {
-  id: uuid('id').primaryKey().defaultRandom(),
+export const members = sqliteTable('members', {
+  id: idPk(),
   /** CAS account id — set once the member links their on-chain account (extension layer). */
   casUserId: text('cas_user_id').unique(),
   email: text('email').notNull().unique(),
   /** Local email verification (this system is the email identity authority). */
-  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+  emailVerifiedAt: tsOpt('email_verified_at'),
   displayName: text('display_name'),
   avatarUrl: text('avatar_url'),
   bio: text('bio'),
@@ -27,32 +30,32 @@ export const members = pgTable('members', {
   /** On-chain account mapping (mirror; CAS/chain is the authority, V2). */
   walletAddress: text('wallet_address'),
   tier: text('tier').notNull().default('member'),
-  status: memberStatus('status').notNull().default('active'),
+  status: text('status').$type<MemberStatus>().notNull().default('active'),
   /** e.g. [{ "scope": "venue:*", "role": "venue_manager" }, { "scope": "community:*", "role": "admin" }] */
-  roles: jsonb('roles').$type<Array<{ scope: string; role: string }>>().notNull().default([]),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+  roles: jsonCol<Array<{ scope: string; role: string }>>('roles', '[]'),
+  createdAt: tsNow('created_at'),
+  updatedAt: tsNow('updated_at'),
+}, (t) => [check('members_status_check', oneOf(t.status, memberStatusValues))]);
 
-export const pointsMirror = pgTable('points_mirror', {
-  memberId: uuid('member_id')
+export const pointsMirror = sqliteTable('points_mirror', {
+  memberId: text('member_id')
     .primaryKey()
     .references(() => members.id, { onDelete: 'cascade' }),
   balance: integer('balance').notNull().default(0),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: tsNow('updated_at'),
   lastSyncedLedgerId: text('last_synced_ledger_id'),
 });
 
-export const pointsLedgerLocal = pgTable('points_ledger_local', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  memberId: uuid('member_id')
+export const pointsLedgerLocal = sqliteTable('points_ledger_local', {
+  id: idPk(),
+  memberId: text('member_id')
     .notNull()
     .references(() => members.id, { onDelete: 'cascade' }),
   delta: integer('delta').notNull(),
   reason: text('reason').notNull(),
   refType: text('ref_type'),
   refId: text('ref_id'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: tsNow('created_at'),
 });
 
 export type Member = typeof members.$inferSelect;

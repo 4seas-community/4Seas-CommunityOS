@@ -2,11 +2,12 @@
  * Event module schema — events / registrations / checkin_tokens.
  * Source of truth: docs/03-domain-model.md §2.2 (Event domain).
  */
-import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, pgEnum, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { boolCol, enumOf, idPk, intervalOrder, jsonCol, jsonList, jsonOpt, oneOf, tsAt, tsNow, tsOpt } from '../../lib/db/sqlite';
 import { venues } from '../place/schema';
 import { members } from '../people/schema';
 
-export const eventStatus = pgEnum('event_status', [
+export const eventStatusValues = [
   'draft',
   'pending_review',
   'published',
@@ -14,99 +15,130 @@ export const eventStatus = pgEnum('event_status', [
   'ended',
   'archived',
   'canceled',
-]);
-export const eventType = pgEnum('event_type', ['in_person', 'online', 'hybrid']);
-export const eventVisibility = pgEnum('event_visibility', ['public', 'members', 'private']);
-export const paymentType = pgEnum('payment_type', ['free', 'fixed', 'pwyf']);
-export const createdVia = pgEnum('created_via', ['web', 'agent', 'telegram']);
-export const checkinMode = pgEnum('checkin_mode', ['qr_rotating', 'qr_static', 'none']);
-export const registrationStatus = pgEnum('registration_status', [
-  'pending',
-  'approved',
-  'waitlist',
-  'declined',
-  'canceled',
-]);
-export const registrationSource = pgEnum('registration_source', ['web', 'agent', 'telegram']);
+] as const;
+export const eventStatus = enumOf(eventStatusValues);
+export type EventStatus = (typeof eventStatus.enumValues)[number];
 
-export const events = pgTable(
+export const eventTypeValues = ['in_person', 'online', 'hybrid'] as const;
+export const eventType = enumOf(eventTypeValues);
+export type EventType = (typeof eventType.enumValues)[number];
+
+export const eventVisibilityValues = ['public', 'members', 'private'] as const;
+export const eventVisibility = enumOf(eventVisibilityValues);
+export type EventVisibility = (typeof eventVisibility.enumValues)[number];
+
+export const paymentTypeValues = ['free', 'fixed', 'pwyf'] as const;
+export const paymentType = enumOf(paymentTypeValues);
+export type PaymentType = (typeof paymentType.enumValues)[number];
+
+export const createdViaValues = ['web', 'agent', 'telegram'] as const;
+export const createdVia = enumOf(createdViaValues);
+export type CreatedVia = (typeof createdVia.enumValues)[number];
+
+export const checkinModeValues = ['qr_rotating', 'qr_static', 'none'] as const;
+export const checkinMode = enumOf(checkinModeValues);
+export type CheckinMode = (typeof checkinMode.enumValues)[number];
+
+export const registrationStatusValues = ['pending', 'approved', 'waitlist', 'declined', 'canceled'] as const;
+export const registrationStatus = enumOf(registrationStatusValues);
+export type RegistrationStatus = (typeof registrationStatus.enumValues)[number];
+
+export const registrationSourceValues = ['web', 'agent', 'telegram'] as const;
+export const registrationSource = enumOf(registrationSourceValues);
+export type RegistrationSource = (typeof registrationSource.enumValues)[number];
+
+export const events = sqliteTable(
   'events',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    communityId: uuid('community_id').notNull(),
-    programId: uuid('program_id'),
+    id: idPk(),
+    communityId: text('community_id').notNull(),
+    programId: text('program_id'),
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
-    startAt: timestamp('start_at', { withTimezone: true }).notNull(),
-    endAt: timestamp('end_at', { withTimezone: true }).notNull(),
+    startAt: tsAt('start_at'),
+    endAt: tsAt('end_at'),
     timezone: text('timezone').notNull().default('Asia/Bangkok'),
-    eventType: eventType('event_type').notNull().default('in_person'),
-    venueId: uuid('venue_id').references(() => venues.id, { onDelete: 'set null' }),
-    venueSnapshot: jsonb('venue_snapshot').$type<Record<string, unknown> | null>(),
+    eventType: text('event_type').$type<EventType>().notNull().default('in_person'),
+    venueId: text('venue_id').references(() => venues.id, { onDelete: 'set null' }),
+    venueSnapshot: jsonOpt<Record<string, unknown> | null>('venue_snapshot'),
     externalLocation: text('external_location'),
-    geo: jsonb('geo').$type<{ lat: number; lng: number } | null>(),
+    geo: jsonOpt<{ lat: number; lng: number } | null>('geo'),
     transportInfo: text('transport_info').notNull().default(''),
     meetingUrl: text('meeting_url'),
     bannerUrl: text('banner_url'),
     suggestedAttendees: integer('suggested_attendees'),
     maxCapacity: integer('max_capacity'),
-    isPaid: paymentType('is_paid').notNull().default('free'),
-    priceInfo: jsonb('price_info').$type<Record<string, unknown> | null>(),
+    isPaid: text('is_paid').$type<PaymentType>().notNull().default('free'),
+    priceInfo: jsonOpt<Record<string, unknown> | null>('price_info'),
     entryRequirements: text('entry_requirements').notNull().default(''),
-    registrationQuestions: jsonb('registration_questions').$type<unknown[]>().notNull().default([]),
-    approvalRequired: boolean('approval_required').notNull().default(false),
-    waitlistEnabled: boolean('waitlist_enabled').notNull().default(false),
-    visibility: eventVisibility('visibility').notNull().default('public'),
-    tags: text('tags').array().notNull().default([]),
-    status: eventStatus('status').notNull().default('draft'),
-    hostId: uuid('host_id')
+    registrationQuestions: jsonCol<unknown[]>('registration_questions', '[]'),
+    approvalRequired: boolCol('approval_required').notNull().default(false),
+    waitlistEnabled: boolCol('waitlist_enabled').notNull().default(false),
+    visibility: text('visibility').$type<EventVisibility>().notNull().default('public'),
+    tags: jsonList('tags'),
+    status: text('status').$type<EventStatus>().notNull().default('draft'),
+    hostId: text('host_id')
       .notNull()
       .references(() => members.id),
-    coHostIds: uuid('co_host_ids').array().notNull().default([]),
-    createdVia: createdVia('created_via').notNull().default('web'),
-    checkinMode: checkinMode('checkin_mode').notNull().default('qr_rotating'),
+    coHostIds: jsonList('co_host_ids'),
+    createdVia: text('created_via').$type<CreatedVia>().notNull().default('web'),
+    checkinMode: text('checkin_mode').$type<CheckinMode>().notNull().default('qr_rotating'),
     checkinClaimCap: integer('checkin_claim_cap'),
-    syncState: jsonb('sync_state').$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    syncState: jsonCol<Record<string, unknown>>('sync_state'),
+    createdAt: tsNow('created_at'),
+    updatedAt: tsNow('updated_at'),
   },
-  (t) => [index('events_start_at_idx').on(t.startAt), index('events_status_idx').on(t.status)],
+  (t) => [
+    index('events_start_at_idx').on(t.startAt),
+    index('events_status_idx').on(t.status),
+    check('events_status_check', oneOf(t.status, eventStatusValues)),
+    check('events_type_check', oneOf(t.eventType, eventTypeValues)),
+    check('events_visibility_check', oneOf(t.visibility, eventVisibilityValues)),
+    check('events_payment_check', oneOf(t.isPaid, paymentTypeValues)),
+    check('events_created_via_check', oneOf(t.createdVia, createdViaValues)),
+    check('events_checkin_mode_check', oneOf(t.checkinMode, checkinModeValues)),
+    check('events_time_order_check', intervalOrder(t.startAt, t.endAt)),
+  ],
 );
 
-export const registrations = pgTable(
+export const registrations = sqliteTable(
   'registrations',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    eventId: uuid('event_id')
+    id: idPk(),
+    eventId: text('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
-    memberId: uuid('member_id')
+    memberId: text('member_id')
       .notNull()
       .references(() => members.id, { onDelete: 'cascade' }),
-    status: registrationStatus('status').notNull().default('pending'),
-    answers: jsonb('answers').$type<Record<string, unknown>>().notNull().default({}),
-    checkedInAt: timestamp('checked_in_at', { withTimezone: true }),
-    source: registrationSource('source').notNull().default('web'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    status: text('status').$type<RegistrationStatus>().notNull().default('pending'),
+    answers: jsonCol<Record<string, unknown>>('answers'),
+    checkedInAt: tsOpt('checked_in_at'),
+    source: text('source').$type<RegistrationSource>().notNull().default('web'),
+    createdAt: tsNow('created_at'),
+    updatedAt: tsNow('updated_at'),
   },
-  (t) => [uniqueIndex('registrations_event_member_unique').on(t.eventId, t.memberId)],
+  (t) => [
+    uniqueIndex('registrations_event_member_unique').on(t.eventId, t.memberId),
+    check('registrations_status_check', oneOf(t.status, registrationStatusValues)),
+    check('registrations_source_check', oneOf(t.source, registrationSourceValues)),
+  ],
 );
 
-export const checkinTokens = pgTable(
+export const checkinTokens = sqliteTable(
   'checkin_tokens',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    eventId: uuid('event_id')
+    id: idPk(),
+    eventId: text('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
-    registrationId: uuid('registration_id').references(() => registrations.id, { onDelete: 'set null' }),
+    registrationId: text('registration_id').references(() => registrations.id, { onDelete: 'set null' }),
     claimUrl: text('claim_url').notNull(),
     tokenHash: text('token_hash').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    expiresAt: tsAt('expires_at'),
+    consumedAt: tsOpt('consumed_at'),
     nftClaimId: text('nft_claim_id'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: tsNow('created_at'),
   },
   (t) => [index('checkin_tokens_event_idx').on(t.eventId)],
 );

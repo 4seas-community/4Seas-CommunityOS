@@ -1,15 +1,19 @@
 /**
  * Booking module schema.
  * Source of truth: docs/03-domain-model.md §2.3 (Booking domain).
- * Note: the no-overlap exclusion constraint (tstzrange + btree_gist) is added by
- * drizzle/0001_booking_exclusion_constraint.sql because drizzle-kit cannot express it.
+ *
+ * The Postgres no-overlap exclusion constraint (tstzrange + btree_gist) is
+ * replaced by SQLite BEFORE INSERT/UPDATE triggers that RAISE(ABORT) on overlap
+ * for active statuses — see drizzle/0003_booking_overlap_triggers.sql. Same
+ * guarantee, expressed in the dialect D1 actually supports.
  */
-import { pgTable, uuid, text, integer, timestamp, pgEnum, index } from 'drizzle-orm/pg-core';
+import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { enumOf, idPk, intervalOrder, nonNegative, oneOf, tsAt, tsNow } from '../../lib/db/sqlite';
 import { venues } from '../place/schema';
 import { events } from '../event/schema';
 import { members } from '../people/schema';
 
-export const bookingStatus = pgEnum('booking_status', [
+export const bookingStatusValues = [
   'pending',
   'approved',
   'rejected',
@@ -17,37 +21,46 @@ export const bookingStatus = pgEnum('booking_status', [
   'checked_in',
   'completed',
   'no_show',
-]);
+] as const;
+export const bookingStatus = enumOf(bookingStatusValues);
+export type BookingStatus = (typeof bookingStatus.enumValues)[number];
 
 /** Statuses that occupy a venue slot and participate in conflict detection. */
 export const ACTIVE_BOOKING_STATUSES = ['pending', 'approved', 'checked_in'] as const;
 
-export const bookings = pgTable(
+export const bookings = sqliteTable(
   'bookings',
   {
-    id: uuid('id').primaryKey().defaultRandom(),
-    venueId: uuid('venue_id')
+    id: idPk(),
+    venueId: text('venue_id')
       .notNull()
       .references(() => venues.id, { onDelete: 'cascade' }),
-    eventId: uuid('event_id').references(() => events.id, { onDelete: 'set null' }),
-    memberId: uuid('member_id')
+    eventId: text('event_id').references(() => events.id, { onDelete: 'set null' }),
+    memberId: text('member_id')
       .notNull()
       .references(() => members.id),
     purpose: text('purpose').notNull().default(''),
     // Occupancy interval INCLUDES the buffer minutes (docs/03 §4.2).
-    startAt: timestamp('start_at', { withTimezone: true }).notNull(),
-    endAt: timestamp('end_at', { withTimezone: true }).notNull(),
+    startAt: tsAt('start_at'),
+    endAt: tsAt('end_at'),
     attendeesCount: integer('attendees_count').notNull().default(1),
-    status: bookingStatus('status').notNull().default('pending'),
+    status: text('status').$type<BookingStatus>().notNull().default('pending'),
     ruleVersion: integer('rule_version').notNull().default(1),
     pointsCharged: integer('points_charged').notNull().default(0),
     depositPoints: integer('deposit_points').notNull().default(0),
-    approvedBy: uuid('approved_by'),
+    approvedBy: text('approved_by'),
     decisionNote: text('decision_note'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: tsNow('created_at'),
+    updatedAt: tsNow('updated_at'),
   },
-  (t) => [index('bookings_venue_start_idx').on(t.venueId, t.startAt)],
+  (t) => [
+    index('bookings_venue_start_idx').on(t.venueId, t.startAt),
+    check('bookings_status_check', oneOf(t.status, bookingStatusValues)),
+    check('bookings_time_order_check', intervalOrder(t.startAt, t.endAt)),
+    check('bookings_attendees_check', nonNegative(t.attendeesCount)),
+    check('bookings_points_check', nonNegative(t.pointsCharged)),
+    check('bookings_deposit_check', nonNegative(t.depositPoints)),
+  ],
 );
 
 export type Booking = typeof bookings.$inferSelect;

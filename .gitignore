@@ -69,3 +69,6 @@ wrangler-state/
 .env
 
 .deploy/
+
+# Local SQLite database used when no D1 binding is present
+.data/

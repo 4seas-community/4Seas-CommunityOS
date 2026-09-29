@@ -136,7 +136,7 @@ export async function applyTelegramBinding(memberId: string, telegram: { id: str
  * Unbind Telegram by setting the column to NULL.
  *
  * The previous version wrote an empty string, which collided with the unique
- * index on the second unbind ("telegram account already bound…" / 23505) — the
+ * index on the second unbind (SQLITE_CONSTRAINT_UNIQUE) — the
  * first member to unbind effectively blocked everyone else.
  */
 export async function clearTelegramBinding(memberId: string): Promise<Member> {

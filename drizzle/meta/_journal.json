@@ -1,26 +1,12 @@
 {
   "version": "7",
-  "dialect": "postgresql",
+  "dialect": "sqlite",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1790000959046,
-      "tag": "0000_small_jetstream",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1790388792239,
-      "tag": "0001_cool_wendell_vaughn",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1790393110325,
-      "tag": "0002_booking_exclusion_constraint",
+      "version": "6",
+      "when": 1790656053984,
+      "tag": "0000_clumsy_malice",
       "breakpoints": true
     }
   ]
