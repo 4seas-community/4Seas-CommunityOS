@@ -130,7 +130,7 @@ pnpm cf:build && pnpm cf:stage && pnpm cf:deploy
   非 admin 访问 403/401。
 - **注意**:outbox 里有 `target`(可能是 chat_id/邮箱),属于 PII,**只能 admin 可见**(参考 #18 的教训)。
 
-### 2.4 Agent key 管理界面
+### 2.4 Agent key 管理界面 ✅ (已完成)
 
 - **现状**:表 `agent_keys`(只存 SHA-256,scopes 为 JSON 数组,支持 `revokedAt`);
   命令行 `scripts/agent-key.ts`;鉴权在 `src/modules/agent/service.ts`。

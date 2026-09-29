@@ -6,9 +6,10 @@
  * actions are audited with the draft id.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { writeAudit } from '../../lib/audit';
+import { notFound } from '../../lib/errors';
 import { agentDrafts, agentKeys, type AgentDraft, type AgentKey } from './schema';
 
 export const DRAFT_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -21,20 +22,62 @@ function hashSecret(secret: string): string {
 }
 
 /** Create a key; the secret is returned once and never stored in clear. */
-export async function createKey(input: { name: string; scopes: AgentScope[]; memberId?: string | null }) {
+export async function createKey(
+  input: { name: string; scopes: AgentScope[]; memberId?: string | null },
+  actorId?: string,
+) {
   const secret = 'cos_ak_' + randomBytes(24).toString('base64url');
   const [row] = await db
     .insert(agentKeys)
     .values({ name: input.name, keyHash: hashSecret(secret), scopes: input.scopes, memberId: input.memberId ?? null })
     .returning();
-  await writeAudit({ actorType: 'system', action: 'agent_key.create', entityType: 'agent_key', entityId: row.id, after: { name: input.name, scopes: input.scopes } });
-  return { keyId: row.id, secret };
+  await writeAudit({
+    actorType: actorId ? 'user' : 'system',
+    actorId: actorId ?? null,
+    action: actorId ? 'POST /api/admin/agent-keys' : 'agent_key.create',
+    entityType: 'agent_key',
+    entityId: row.id,
+    after: { name: input.name, scopes: input.scopes },
+  });
+  return { keyId: row.id, secret, key: row };
 }
 
-export async function revokeKey(id: string): Promise<void> {
-  await db.update(agentKeys).set({ revokedAt: new Date() }).where(eq(agentKeys.id, id));
-  await writeAudit({ actorType: 'system', action: 'agent_key.revoke', entityType: 'agent_key', entityId: id });
+export async function revokeKey(id: string, actorId?: string): Promise<AgentKey> {
+  const [existing] = await db.select().from(agentKeys).where(eq(agentKeys.id, id)).limit(1);
+  if (!existing) throw notFound('Agent key not found');
+  const [updated] = await db.update(agentKeys).set({ revokedAt: new Date() }).where(eq(agentKeys.id, id)).returning();
+  await writeAudit({
+    actorType: actorId ? 'user' : 'system',
+    actorId: actorId ?? null,
+    action: actorId ? 'DELETE /api/admin/agent-keys/' + id : 'agent_key.revoke',
+    entityType: 'agent_key',
+    entityId: id,
+    before: { revokedAt: existing.revokedAt },
+    after: { revokedAt: updated.revokedAt },
+  });
+  return updated;
 }
+
+/** List all agent keys, omitting the keyHash for security. */
+export async function listKeys() {
+  const rows = await db
+    .select({
+      id: agentKeys.id,
+      name: agentKeys.name,
+      scopes: agentKeys.scopes,
+      memberId: agentKeys.memberId,
+      lastUsedAt: agentKeys.lastUsedAt,
+      revokedAt: agentKeys.revokedAt,
+      createdAt: agentKeys.createdAt,
+    })
+    .from(agentKeys)
+    .orderBy(desc(agentKeys.createdAt));
+  return rows.map((r) => ({
+    ...r,
+    isRevoked: Boolean(r.revokedAt),
+  }));
+}
+
 
 /** Resolve a bearer secret to its key row (or null when invalid/revoked). */
 export async function authenticate(secret: string): Promise<AgentKey | null> {

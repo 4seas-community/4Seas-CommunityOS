@@ -14,6 +14,7 @@ import { json, unauthorized } from '../../lib/errors';
 import { z } from 'zod';
 import * as service from './service';
 import * as notifyService from '../notify/service';
+import * as agentService from '../agent/service';
 import { outboxStatusValues, type OutboxStatus, notificationChannelValues, type NotificationChannel } from '../notify/schema';
 import { requireRole } from '../../lib/auth/roles';
 import { writeAudit } from '../../lib/audit';
@@ -108,5 +109,47 @@ export function registerAdminRoutes(router: Router): void {
       after: { status: updated.status, lastError: updated.lastError },
     });
     return json({ notification: updated }, 200, { 'x-audit-logged': '1' });
+  });
+
+  router.get('/api/admin/agent-keys', async (_req, ctx) => {
+    const session = requireSession(ctx.session);
+    requireRole(session, 'admin');
+    const keys = await agentService.listKeys();
+    return json({ keys });
+  });
+
+  router.post('/api/admin/agent-keys', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    requireRole(session, 'admin');
+    const body = await readJson(
+      req,
+      z.object({
+        name: z.string().trim().min(1, 'Name is required').max(100),
+        scopes: z.array(z.enum(agentService.AGENT_SCOPES)).min(1, 'At least one scope is required'),
+        memberId: z.string().nullish(),
+      }),
+    );
+    const result = await agentService.createKey(body, session.sub);
+    return json(
+      {
+        key: {
+          id: result.key.id,
+          name: result.key.name,
+          scopes: result.key.scopes,
+          memberId: result.key.memberId,
+          createdAt: result.key.createdAt,
+        },
+        secret: result.secret,
+      },
+      201,
+      { 'x-audit-logged': '1' },
+    );
+  });
+
+  router.delete('/api/admin/agent-keys/:id', async (_req, ctx) => {
+    const session = requireSession(ctx.session);
+    requireRole(session, 'admin');
+    const updated = await agentService.revokeKey(ctx.params.id, session.sub);
+    return json({ ok: true, revokedId: updated.id }, 200, { 'x-audit-logged': '1' });
   });
 }

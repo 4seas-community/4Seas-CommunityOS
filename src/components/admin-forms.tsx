@@ -363,3 +363,149 @@ export function NotificationRetryButton({ id }: { id: string }) {
   );
 }
 
+const ALL_AGENT_SCOPES = [
+  { scope: 'venues:read', label: 'Read venues & availability' },
+  { scope: 'events:read', label: 'Read events & public schedules' },
+  { scope: 'events:write', label: 'Create event drafts' },
+  { scope: 'bookings:write', label: 'Create booking drafts' },
+] as const;
+
+/** Admin: generate an API key for AI agents / MCP. */
+export function CreateAgentKeyForm() {
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [scopes, setScopes] = useState<string[]>(['venues:read', 'events:read']);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function toggleScope(sc: string) {
+    setScopes((prev) => (prev.includes(sc) ? prev.filter((s) => s !== sc) : [...prev, sc]));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (scopes.length === 0) {
+      setError('Select at least one scope.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/agent-keys', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, scopes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message ?? 'Failed to create key');
+      setSecret(data.secret);
+      setName('');
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 540 }}>
+      {secret ? (
+        <div className="notice notice-warn" style={{ marginBottom: 16 }}>
+          <h4 style={{ margin: '0 0 8px' }}>⚠️ Store this secret now</h4>
+          <p style={{ margin: '0 0 8px', fontSize: 14 }}>
+            This is the only time this secret will ever be displayed. If you lose it, you will need to create a new key.
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <code style={{ fontSize: 13, wordBreak: 'break-all', padding: '6px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 4, flex: 1 }}>
+              {secret}
+            </code>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                navigator.clipboard.writeText(secret);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ marginTop: 12 }}
+            onClick={() => setSecret(null)}
+          >
+            Done
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="k-name">Key Name</label>
+          <input
+            id="k-name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. claude-desktop, discord-bot"
+          />
+
+          <div style={{ margin: '14px 0 8px' }}>
+            <strong>Scopes</strong>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {ALL_AGENT_SCOPES.map(({ scope, label }) => (
+              <label key={scope} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={scopes.includes(scope)}
+                  onChange={() => toggleScope(scope)}
+                />
+                <span>
+                  <code>{scope}</code> <span className="muted" style={{ fontSize: 13 }}>— {label}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {error && <div className="notice notice-error" style={{ marginTop: 12 }}>{error}</div>}
+
+          <div style={{ marginTop: 16 }}>
+            <button className="btn btn-primary" disabled={busy || !name.trim()}>
+              {busy ? 'Creating…' : 'Generate agent key'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** Admin: revoke an agent API key. */
+export function RevokeAgentKeyButton({ id, name }: { id: string; name: string }) {
+  const { call, error, ok, busy } = useAction();
+  return (
+    <div style={{ display: 'inline-block' }}>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        style={{ padding: '4px 10px', fontSize: 13, color: '#ef4444' }}
+        disabled={busy}
+        onClick={() => {
+          if (confirm(`Revoke key "${name}"? Agents using this key will immediately be rejected.`)) {
+            call('DELETE', '/api/admin/agent-keys/' + id, undefined, 'Key revoked');
+          }
+        }}
+      >
+        {busy ? 'Revoking…' : 'Revoke'}
+      </button>
+      <Feedback error={error} ok={ok} />
+    </div>
+  );
+}
+
+

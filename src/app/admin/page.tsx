@@ -123,6 +123,14 @@ export default async function AdminPage() {
             </p>
           </Link>
         )}
+        {isCommunityAdmin(member) && (
+          <Link className="card" href="/admin/agent-keys" style={{ display: 'block' }}>
+            <h3>Agent keys</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Credentials for AI agents and MCP clients with scoped permissions.
+            </p>
+          </Link>
+        )}
         <Link className="card" href="/venues" style={{ display: 'block' }}>
           <h3>Public venue list</h3>
           <p className="muted" style={{ margin: 0 }}>
@@ -132,7 +140,7 @@ export default async function AdminPage() {
       </div>
 
       <div className="notice notice-info" style={{ marginTop: 20 }}>
-        Still to come from the batch 2 plan: agent key management, data export and the audit-log viewer
+        Still to come from the batch 2 plan: data export and the audit-log viewer
         (docs/10-gap-analysis.md §3).
       </div>
     </section>
