@@ -36,7 +36,6 @@ const TABLES = [
 ];
 
 beforeAll(async () => {
-  process.env.DATABASE_FILE = ':memory:';
   await applyLocalMigrations();
 });
 

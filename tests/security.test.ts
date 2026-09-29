@@ -13,8 +13,9 @@ import * as peopleService from '../src/modules/people/service';
 import { db } from '../src/lib/db';
 import { isBookingOverlap, isUniqueViolation } from '../src/lib/db/errors';
 import { bookings } from '../src/modules/booking/schema';
+import { events } from '../src/modules/event/schema';
+import { eq } from 'drizzle-orm';
 import { seedCommunity, seedMember, seedVenue, sessionFor, bookingInput } from './helpers';
-import { sql } from 'drizzle-orm';
 
 const VENUE_A = 'venue:aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const VENUE_B = 'venue:bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
@@ -196,5 +197,48 @@ describe('booking visibility', () => {
     // The service layer must map exactly this error shape to a 409.
     expect(isBookingOverlap(caught)).toBe(true);
     expect(isUniqueViolation(caught)).toBe(false);
+  });
+
+  /**
+   * The overlap triggers only fire when a write reaches the database after the
+   * friendly pre-check (a race). createEvent sends the event and its booking in
+   * one db.batch for exactly this reason: the trigger must roll back both, since
+   * a dangling event with no booking would be a silent double-booking.
+   */
+  it('rolls the whole batch back when the venue slot is taken (no orphan event)', async () => {
+    const community = await seedCommunity();
+    const { venue } = await seedVenue(community.id);
+    const host = await seedMember('batch-host@test.dev');
+
+    const start = new Date('2026-05-04T03:00:00.000Z');
+    const end = new Date('2026-05-04T05:00:00.000Z');
+    await bookingService.createBooking(bookingInput(venue.id, start, end), sessionFor(host.id));
+
+    const eventId = crypto.randomUUID();
+    await expect(
+      db.batch([
+        db.insert(events).values({
+          id: eventId,
+          communityId: community.id,
+          title: 'orphan probe',
+          startAt: start,
+          endAt: end,
+          hostId: host.id,
+        }),
+        db.insert(bookings).values({
+          venueId: venue.id,
+          eventId,
+          memberId: host.id,
+          purpose: 'race',
+          startAt: start,
+          endAt: end,
+          status: 'approved',
+          ruleVersion: 1,
+        }),
+      ]),
+    ).rejects.toThrow(/booking_overlap|UNIQUE/i);
+
+    const orphans = await db.select().from(events).where(eq(events.title, 'orphan probe'));
+    expect(orphans).toHaveLength(0);
   });
 });
