@@ -9,7 +9,7 @@
  *   DELETE /api/admin/members/{id}/roles          { role, scope }
  *   POST   /api/admin/members/{id}/points         { delta, reason }
  */
-import type { Router } from '../../lib/http';
+import { readJson, type Router } from '../../lib/http';
 import { json, unauthorized } from '../../lib/errors';
 import { z } from 'zod';
 import * as service from './service';
@@ -45,21 +45,21 @@ export function registerAdminRoutes(router: Router): void {
 
   router.post('/api/admin/members/:id/roles', async (req, ctx) => {
     const session = requireSession(ctx.session);
-    const body = roleSchema.parse(await req.json().catch(() => ({})));
+    const body = await readJson(req, roleSchema);
     const member = await service.grantRole(ctx.params.id, body, session);
     return json({ member: { id: member.id, roles: member.roles } }, 200, { 'x-audit-logged': '1' });
   });
 
   router.delete('/api/admin/members/:id/roles', async (req, ctx) => {
     const session = requireSession(ctx.session);
-    const body = roleSchema.parse(await req.json().catch(() => ({})));
+    const body = await readJson(req, roleSchema);
     const member = await service.revokeRole(ctx.params.id, body, session);
     return json({ member: { id: member.id, roles: member.roles } }, 200, { 'x-audit-logged': '1' });
   });
 
   router.post('/api/admin/members/:id/points', async (req, ctx) => {
     const session = requireSession(ctx.session);
-    const body = pointsSchema.parse(await req.json().catch(() => ({})));
+    const body = await readJson(req, pointsSchema);
     return json(await service.adjustPoints(ctx.params.id, body, session), 201, { 'x-audit-logged': '1' });
   });
 }

@@ -4,7 +4,7 @@
  *   POST /api/bookings/{id}/approve|reject|cancel
  *   GET  /api/bookings?venue=&from=&to=      (occupancy overview)
  */
-import type { Router } from '../../lib/http';
+import { readJson, type Router } from '../../lib/http';
 import { forbidden, json, unauthorized } from '../../lib/errors';
 import { hasRole } from '../../lib/auth/roles';
 import * as service from './service';
@@ -22,7 +22,7 @@ function requireSession(s: SessionPayload | null): SessionPayload {
 export function registerBookingRoutes(router: Router): void {
   router.post('/api/bookings', async (req, ctx) => {
     const session = requireSession(ctx.session);
-    const input = service.bookingCreateSchema.parse(await req.json().catch(() => ({})));
+    const input = await readJson(req, service.bookingCreateSchema);
     const result = await service.createBooking(input, session);
     return json({ booking: result.booking, warnings: result.warnings, approvalMode: result.approvalMode }, 201, {
       'x-audit-logged': '1',
