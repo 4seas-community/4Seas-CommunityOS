@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { canUseAdmin, getCurrentMember } from '../lib/session-server';
 import Image from 'next/image';
 import Link from 'next/link';
 import logo from '../../public/4seas-logo.png';
@@ -20,7 +21,10 @@ const NAV = [
   { href: '/me', label: 'Me' },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The Admin entry only appears for community admins / venue managers.
+  const member = await getCurrentMember();
+  const nav = canUseAdmin(member) ? [...NAV, { href: '/admin', label: 'Admin' }] : NAV;
   return (
     <html lang="en">
       <body>
@@ -33,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </span>
             </Link>
             <nav className="site-nav" aria-label="Primary">
-              {NAV.map((item) => (
+              {nav.map((item) => (
                 <Link key={item.href} href={item.href}>
                   {item.label}
                 </Link>
