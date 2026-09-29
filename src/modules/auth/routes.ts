@@ -35,7 +35,10 @@ const verifyEmail: Handler = async (req) => {
 const loginRequest: Handler = async (req) => {
   const body = await readJson(req, loginRequestSchema);
   const res = await auth.requestLogin(body.email);
-  return json({ sent: true, devToken: res.devToken ?? null, consoleEmail: config.emailBackend !== 'smtp' }, 202);
+  // consoleEmail tells the caller whether the link is only in the server log:
+  // it must stay false once a real provider is configured, or a client would
+  // happily report "check the logs" for a mail that actually went out.
+  return json({ sent: true, devToken: res.devToken ?? null, consoleEmail: config.emailBackend === 'console' }, 202);
 };
 
 const loginVerify: Handler = async (req) => {
