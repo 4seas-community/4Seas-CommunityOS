@@ -16,7 +16,12 @@ export const config = {
   appUrl: str('APP_URL', 'http://localhost:3000'),
   defaultTimezone: str('DEFAULT_TIMEZONE', 'Asia/Bangkok'),
   sessionSecret: str('SESSION_SECRET', 'dev-only-session-secret-change-me'),
+  /** console (dev/test default) | resend (production delivery). */
   emailBackend: str('EMAIL_BACKEND', 'console'),
+  /** Transactional mail goes out as the same identity as the rest of iDoris. */
+  emailFrom: str('EMAIL_FROM', 'iDoris AI <hello@idoris.ai>'),
+  emailReplyTo: str('EMAIL_REPLY_TO', 'hello@idoris.ai'),
+  resendApiKey: str('RESEND_API_KEY'),
   telegramBotToken: str('TELEGRAM_BOT_TOKEN'),
   lumaApiKey: str('LUMA_API_KEY'),
   lumaEnabled: bool('LUMA_ENABLED', false),
@@ -57,6 +62,12 @@ export function configProblems(): string[] {
   if (INSECURE_DEFAULTS.has(config.botFeedToken)) problems.push('BOT_FEED_TOKEN is unset or the shipped dev default');
   if (config.pointsEnabled && (config.casApiUrl === '' || config.casServiceKey === '')) {
     problems.push('POINTS_ENABLED=true but CAS_API_URL/CAS_SERVICE_KEY are missing (points would use the in-memory mock)');
+  }
+  if (config.emailBackend === 'resend' && config.resendApiKey === '') {
+    problems.push('EMAIL_BACKEND=resend but RESEND_API_KEY is missing (no email would be delivered)');
+  }
+  if (config.emailBackend === 'resend' && !config.emailFrom.includes('@')) {
+    problems.push('EMAIL_FROM is not an address: ' + config.emailFrom);
   }
   if (config.lumaEnabled && config.lumaApiKey === '') problems.push('LUMA_ENABLED=true but LUMA_API_KEY is missing');
   if (config.socialLayerEnabled && config.socialLayerToken === '') {

@@ -12,6 +12,8 @@ import { applyLocalMigrations } from '../src/lib/db/migrate-local';
 
 // Must be set before the first query: the driver reads it when it resolves.
 process.env.DATABASE_FILE = ':memory:';
+// Tests must never talk to a real mail provider, whatever .env says.
+process.env.EMAIL_BACKEND = 'console';
 
 /** Child tables first: foreign keys are enforced (PRAGMA foreign_keys = ON). */
 const TABLES = [

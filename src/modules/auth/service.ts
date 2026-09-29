@@ -85,11 +85,17 @@ export async function register(input: { email: string; displayName?: string; tim
       timezone: input.timezone ?? config.defaultTimezone,
     }));
   const token = await issueToken(email, 'verify_email');
-  await sendEmail({
+  const sent = await sendEmail({
     to: email,
     subject: 'Verify your 4Seas account',
-    body: 'Verify your account: ' + config.appUrl + '/verify-email?token=' + token,
+    body:
+      'Welcome to 4Seas.\n\n' +
+      'Confirm this address to finish creating your account:\n' +
+      config.appUrl + '/verify-email?token=' + token + '\n\n' +
+      'The link expires in one hour. If you did not sign up, ignore this email.',
   });
+  // The member row exists either way, but ops should know when nothing was delivered.
+  if (!sent.ok) console.error('[auth] verification email not delivered:', sent.error, sent.delivered);
   return { memberId: member.id, email, status: 'unverified' as const };
 }
 
@@ -108,15 +114,19 @@ export async function requestLogin(email: string): Promise<{ devToken?: string }
   const member = await people.findMemberByEmail(normalized);
   if (member?.emailVerifiedAt) {
     const token = await issueToken(normalized, 'login');
-    await sendEmail({
+    const sent = await sendEmail({
       to: normalized,
       subject: 'Your 4Seas login link',
-      body: 'Login: ' + config.appUrl + '/login/verify?token=' + token,
+      body:
+        'Here is your login link for 4Seas:\n\n' +
+        config.appUrl + '/login/verify?token=' + token + '\n\n' +
+        'It works once and expires in one hour. If you did not ask for it, ignore this email.',
     });
+    if (!sent.ok) console.error('[auth] login email not delivered:', sent.error, sent.delivered);
     // Dev convenience ONLY: with the console email backend the token is already
     // written to the server log, so returning it over HTTP adds no new exposure.
     // In production this must never happen — that would be account takeover.
-    if (isDevelopment && config.emailBackend !== 'smtp') return { devToken: token };
+    if (isDevelopment && config.emailBackend === 'console') return { devToken: token };
   }
   return {};
 }
