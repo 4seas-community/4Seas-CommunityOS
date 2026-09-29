@@ -44,6 +44,11 @@ export default async function MePage({ searchParams }: { searchParams: Promise<{
             so an older email in your inbox fails even when the newest one is fine. Send a fresh link below.
           </div>
         )}
+        {login === 'invalid-email' && (
+          <div className="notice notice-error">
+            <strong>That email address does not look right.</strong> Check it and try again.
+          </div>
+        )}
         {login === 'link-sent' && (
           <div className="notice notice-info">
             Check your inbox — a fresh sign-in link is on its way. Use the newest email: every link works only once.

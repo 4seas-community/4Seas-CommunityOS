@@ -32,10 +32,18 @@ const verifyEmail: Handler = async (req) => {
   return json(await auth.verifyEmail(body.token));
 };
 
-/** True when a browser posted an HTML form rather than fetch() sending JSON. */
-function isFormPost(req: Request): boolean {
+/**
+ * True when a human's browser is doing the request rather than an API client.
+ *
+ * Content-type catches a normal form post. Accept catches everything else a
+ * browser does — a form repost, a pasted URL, a redirect — because navigations ask
+ * for text/html. Browser requests must always end on a page; an API client asking
+ * for JSON keeps getting JSON.
+ */
+function isBrowserNavigation(req: Request): boolean {
   const type = req.headers.get('content-type') ?? '';
-  return type.includes('form-urlencoded') || type.includes('multipart/form-data');
+  if (type.includes('form-urlencoded') || type.includes('multipart/form-data')) return true;
+  return (req.headers.get('accept') ?? '').includes('text/html');
 }
 
 /**
@@ -53,10 +61,17 @@ function seeOther(location: string, headers: Record<string, string> = {}): Respo
 }
 
 const loginRequest: Handler = async (req) => {
-  const form = isFormPost(req);
-  const body = await readJson(req, loginRequestSchema);
+  const browser = isBrowserNavigation(req);
+  let body: { email: string };
+  try {
+    body = await readJson(req, loginRequestSchema);
+  } catch (err) {
+    // A browser must never be shown a JSON validation error.
+    if (browser) return seeOther('/me?login=invalid-email');
+    throw err;
+  }
   const res = await auth.requestLogin(body.email);
-  if (form) return seeOther('/me?login=link-sent');
+  if (browser) return seeOther('/me?login=link-sent');
   // consoleEmail tells the caller whether the link is only in the server log:
   // it must stay false once a real provider is configured, or a client would
   // happily report "check the logs" for a mail that actually went out.
@@ -64,7 +79,7 @@ const loginRequest: Handler = async (req) => {
 };
 
 const loginVerify: Handler = async (req) => {
-  const form = isFormPost(req);
+  const browser = isBrowserNavigation(req);
   try {
     const body = await readJson(req, loginVerifySchema);
     const member = await auth.verifyLogin(body.token);
@@ -76,18 +91,18 @@ const loginVerify: Handler = async (req) => {
     // The marker lets /me distinguish "not signed in" from "signed in, but this
     // browser refused to keep the cookie" (private windows and in-app mail
     // webviews do that) — otherwise both look like the same sign-in form.
-    if (form) return seeOther('/me?login=ok', { 'set-cookie': sessionCookie(token) });
+    if (browser) return seeOther('/me?login=ok', { 'set-cookie': sessionCookie(token) });
     return json({ member: people.publicMember(member) }, 200, { 'set-cookie': sessionCookie(token) });
   } catch (err) {
     // A used or expired link owes the visitor an explanation, not raw JSON.
-    if (form) return seeOther('/me?login=failed');
+    if (browser) return seeOther('/me?login=failed');
     throw err;
   }
 };
 
 const logout: Handler = async (req) => {
   const headers = { 'set-cookie': clearedSessionCookie() };
-  if (isFormPost(req)) return seeOther('/me', headers);
+  if (isBrowserNavigation(req)) return seeOther('/me', headers);
   return json({ ok: true }, 200, headers);
 };
 

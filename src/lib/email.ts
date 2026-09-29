@@ -57,20 +57,25 @@ export function tokenFromEmail(msg: EmailMessage | undefined): string {
 /* --------------------------------------------------------------- html shell */
 
 /**
- * Brand shell shared with the rest of iDoris (palette taken from idoris.ai).
+ * 4Seas Community owns the message: its logo heads the card and its name signs
+ * off in the footer. iDoris is only the delivery provider (the verified sending
+ * domain), so it gets one small line at the bottom and nothing else.
+ *
  * Mail clients only understand table layout plus inline styles — flex/grid and
- * <style> classes get dropped by Outlook and parts of Gmail, so this is tables
- * all the way down, same as PowerSalesMan's shared/email-shell.ts.
+ * <style> classes get dropped by Outlook and parts of Gmail — so this is tables
+ * all the way down.
  */
 const PAPER = '#EFEBE4';
 const CARD = '#FFFFFF';
 const INK = '#16161D';
 const MUTED = '#8A8892';
+const FAINT = '#A9A7AF';
 const RULE = '#E2DBD0';
 const ORANGE = '#E2762B';
-const SERIF = "Georgia, 'Songti SC', 'Times New Roman', serif";
 const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans Thai',Thonburi,sans-serif";
-const DORIS_FACE = 'https://idoris.ai/assets/email/doris-face.png';
+/** public/4seas-logo.png is 500x113; the header renders it at a fixed size. */
+const LOGO_WIDTH = 150;
+const LOGO_HEIGHT = 34;
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -88,7 +93,7 @@ function bodyToHtml(text: string): string {
 }
 
 export function renderEmailHtml(message: EmailMessage): string {
-  const site = config.appUrl.replace(/^https?:\/\//, '');
+  const site = config.emailBrandUrl.replace(/^https?:\/\//, '');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -101,24 +106,19 @@ export function renderEmailHtml(message: EmailMessage): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${PAPER}">
 <tr><td align="center" style="padding:28px 12px 40px">
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;background:${CARD};border:1px solid ${RULE};border-radius:14px;overflow:hidden;font-family:${SANS}">
-    <tr><td style="padding:22px 28px 14px;border-bottom:1px solid ${RULE}">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td align="left" style="vertical-align:middle">
-          <a href="https://idoris.ai" style="text-decoration:none;font-family:${SERIF};font-size:21px;letter-spacing:.01em;color:${INK}"><span style="color:${ORANGE}">i</span>DORIS.AI</a>
-          <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:${MUTED};padding-top:4px">4Seas CommunityOS</div>
-        </td>
-        <td align="right" style="vertical-align:middle;width:60px">
-          <img src="${DORIS_FACE}" width="52" height="52" alt="Doris, the iDoris AI assistant" style="display:block;width:52px;height:52px;border-radius:50%;border:0">
-        </td>
-      </tr></table>
+    <tr><td style="padding:22px 28px 16px;border-bottom:1px solid ${RULE}">
+      <a href="${esc(config.emailBrandUrl)}" style="text-decoration:none">
+        <img src="${esc(config.emailLogoUrl)}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${esc(config.emailBrandName)}" style="display:block;width:${LOGO_WIDTH}px;height:${LOGO_HEIGHT}px;border:0">
+      </a>
     </td></tr>
     <tr><td style="padding:26px 28px 30px;font-size:15px;line-height:1.65;color:${INK}">
       ${bodyToHtml(message.body)}
     </td></tr>
   </table>
   <div style="padding-top:14px;font-size:11px;line-height:1.7;color:${MUTED};font-family:${SANS}">
-    Sent by 4Seas CommunityOS &middot; <a href="https://${esc(site)}" style="color:${MUTED}">${esc(site)}</a><br>
-    Questions? Reply to <a href="mailto:${esc(config.emailReplyTo)}" style="color:${MUTED}">${esc(config.emailReplyTo)}</a> &mdash; that reaches a human.
+    ${esc(config.emailBrandName)} &middot; <a href="${esc(config.emailBrandUrl)}" style="color:${MUTED}">${esc(site)}</a><br>
+    Questions? Reply to <a href="mailto:${esc(config.emailReplyTo)}" style="color:${MUTED}">${esc(config.emailReplyTo)}</a> &mdash; that reaches a human.<br>
+    <span style="color:${FAINT}">Delivered with ${esc(config.emailProviderName)}.</span>
   </div>
 </td></tr>
 </table>
