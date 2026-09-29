@@ -33,9 +33,12 @@ export function registerEventRoutes(router: Router): void {
     const view = ctx.url.searchParams.get('view') ?? undefined;
     const from = ctx.url.searchParams.get('from');
     const to = ctx.url.searchParams.get('to');
+    // ?status=pending_review&status=draft filters the admin review queue.
+    const status = ctx.url.searchParams.getAll('status');
     const events = await service.listEvents(
       {
         view: view === 'day' || view === 'week' ? view : 'list',
+        status: status.length === 0 ? undefined : status,
         venue: ctx.url.searchParams.get('venue') ?? undefined,
         program: ctx.url.searchParams.get('program') ?? undefined,
         tag: ctx.url.searchParams.get('tag') ?? undefined,

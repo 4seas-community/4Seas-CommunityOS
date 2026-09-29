@@ -11,6 +11,8 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { members, pointsLedgerLocal, pointsMirror, type Member } from '../people/schema';
+import { bookings } from '../booking/schema';
+import { events } from '../event/schema';
 import { requireRole } from '../../lib/auth/roles';
 import type { SessionPayload } from '../../lib/auth/session';
 import { writeAudit } from '../../lib/audit';
@@ -153,6 +155,8 @@ export async function overview(actor: SessionPayload) {
   requireAdmin(actor);
   const rows = await db.select().from(members);
   const mirrors = await db.select().from(pointsMirror);
+  const bookingRows = await db.select().from(bookings);
+  const eventRows = await db.select().from(events);
   return {
     members: {
       total: rows.length,
@@ -163,6 +167,14 @@ export async function overview(actor: SessionPayload) {
     points: {
       accounts: mirrors.length,
       totalBalance: mirrors.reduce((sum, m) => sum + m.balance, 0),
+    },
+    /** Work waiting on a human decision (docs/10 §3 batch 2). */
+    queues: {
+      bookingsPending: bookingRows.filter((b) => b.status === 'pending').length,
+      eventsPendingReview: eventRows.filter((e) => e.status === 'pending_review').length,
+      bookingsUpcoming: bookingRows.filter(
+        (b) => ['approved', 'checked_in'].includes(b.status) && b.endAt.getTime() > Date.now(),
+      ).length,
     },
   };
 }
