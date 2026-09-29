@@ -17,7 +17,8 @@ const message = {
 
 const options = {
   apiKey: 're_test_key',
-  from: 'iDoris AI <hello@idoris.ai>',
+  // The sending domain belongs to iDoris, but the name on the envelope is 4Seas.
+  from: '4Seas Community <hello@idoris.ai>',
   replyTo: 'hello@idoris.ai',
 };
 
@@ -45,7 +46,7 @@ describe('resend backend', () => {
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers.authorization).toBe('Bearer re_test_key');
     const payload = JSON.parse(String(calls[0].init.body)) as Record<string, string>;
-    expect(payload.from).toBe('iDoris AI <hello@idoris.ai>');
+    expect(payload.from).toBe('4Seas Community <hello@idoris.ai>');
     expect(payload.reply_to).toBe('hello@idoris.ai');
     expect(payload.to).toBe('member@test.dev');
     expect(payload.text).toContain('token=abc');
@@ -83,10 +84,15 @@ describe('html shell', () => {
     expect(html).toContain('href="https://4seas-communityos.pages.dev/"');
   });
 
-  it('carries the iDoris wordmark and the 4Seas context line', () => {
+  it('leads with the 4Seas brand and keeps iDoris to one small footer line', () => {
     const html = renderEmailHtml(message);
-    expect(html).toContain('DORIS.AI');
-    expect(html).toContain('4Seas CommunityOS');
+    expect(html).toContain('4seas-logo.png');
+    expect(html).toContain('alt="4Seas Community"');
+    expect(html).toContain('4Seas Community &middot;');
+    expect(html).toContain('Delivered with iDoris AI.');
+    // The provider is never the message's brand: no wordmark, one mention only.
+    expect(html).not.toContain('DORIS.AI');
+    expect(html.match(/iDoris/g) ?? []).toHaveLength(1);
   });
 });
 

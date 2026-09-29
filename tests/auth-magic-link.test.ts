@@ -84,6 +84,35 @@ describe('magic link', () => {
     expect(res.headers.get('location')).toBe('/me?login=link-sent');
   });
 
+  it('never answers a browser navigation with raw JSON', async () => {
+    const navigation = new Request('http://test.local/api/auth/login/request', {
+      method: 'POST',
+      // A browser sending JSON is unusual, but Accept is the reliable signal.
+      headers: { 'content-type': 'application/json', accept: 'text/html,application/xhtml+xml' },
+      body: JSON.stringify({ email: 'nav@test.dev' }),
+    });
+    const res = await router.handle(navigation, '/api/auth/login/request');
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/me?login=link-sent');
+
+    // Without text/html it is an API client, and it keeps getting JSON.
+    const api = await router.handle(jsonPost('/api/auth/login/request', { email: 'api@test.dev' }), '/api/auth/login/request');
+    expect(api.status).toBe(202);
+  });
+
+  it('sends a browser with a bad email back to the form instead of showing JSON', async () => {
+    const res = await router.handle(
+      new Request('http://test.local/api/auth/login/request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'text/html' },
+        body: 'email=not-an-email',
+      }),
+      '/api/auth/login/request',
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/me?login=invalid-email');
+  });
+
   it('clears the cookie through a redirect when the sign-out form is posted', async () => {
     const res = await router.handle(formPost('/api/auth/logout', {}), '/api/auth/logout');
     expect(res.status).toBe(303);

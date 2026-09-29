@@ -12,15 +12,24 @@ function bool(name: string, fallback: boolean): boolean {
   return v === 'true' || v === '1';
 }
 
+const appUrl = str('APP_URL', 'http://localhost:3000');
+
 export const config = {
-  appUrl: str('APP_URL', 'http://localhost:3000'),
+  appUrl,
   defaultTimezone: str('DEFAULT_TIMEZONE', 'Asia/Bangkok'),
   sessionSecret: str('SESSION_SECRET', 'dev-only-session-secret-change-me'),
   /** console (dev/test default) | resend (production delivery). */
   emailBackend: str('EMAIL_BACKEND', 'console'),
-  /** Transactional mail goes out as the same identity as the rest of iDoris. */
-  emailFrom: str('EMAIL_FROM', 'iDoris AI <hello@idoris.ai>'),
+  /**
+   * Mail speaks for 4Seas Community. iDoris only provides the verified sending
+   * domain (hello@idoris.ai), so its name appears once, small, in the footer.
+   */
+  emailFrom: str('EMAIL_FROM', '4Seas Community <hello@idoris.ai>'),
   emailReplyTo: str('EMAIL_REPLY_TO', 'hello@idoris.ai'),
+  emailBrandName: str('EMAIL_BRAND_NAME', '4Seas Community'),
+  emailBrandUrl: str('EMAIL_BRAND_URL', appUrl),
+  emailLogoUrl: str('EMAIL_LOGO_URL', appUrl + '/4seas-logo.png'),
+  emailProviderName: str('EMAIL_PROVIDER_NAME', 'iDoris AI'),
   resendApiKey: str('RESEND_API_KEY'),
   telegramBotToken: str('TELEGRAM_BOT_TOKEN'),
   lumaApiKey: str('LUMA_API_KEY'),
