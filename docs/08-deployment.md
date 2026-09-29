@@ -106,9 +106,15 @@ SQLite 没有排他约束,改为 `bookings` 上的 **BEFORE INSERT/UPDATE 触发
 ## 6. 邮件(事务邮件直发)
 
     EMAIL_BACKEND=resend
-    RESEND_API_KEY=re_...        # idoris.ai 的 send-only key,只存在本机 .env 与 Pages secret
-    EMAIL_FROM=iDoris AI <hello@idoris.ai>
+    RESEND_API_KEY=re_...                      # idoris.ai 的 send-only key(本机 .env + Pages secret)
+    EMAIL_FROM=4Seas Community <hello@idoris.ai>
     EMAIL_REPLY_TO=hello@idoris.ai
+    EMAIL_BRAND_NAME=4Seas Community           # 邮件抬头/署名(默认)
+    EMAIL_PROVIDER_NAME=iDoris AI              # 页脚一行小字,仅作投递方说明
+
+**品牌原则**:邮件的主体是 4Seas Community(抬头是 `public/4seas-logo.png`,页脚署名
+`4Seas Community · 站点`);iDoris 只是提供已验证发信域名的投递方,全信只出现一次、浅灰小字
+`Delivered with iDoris AI.`。发件地址必须留在 `idoris.ai`(域名验证),显示名可自由配置。
 
 - 实现:`src/lib/email.ts`(`sendViaResend`);品牌外壳与 PowerSalesMan 的
   `shared/email-shell.ts` 同源(palette / iDoris 字标 / Doris 头像)。
@@ -116,7 +122,24 @@ SQLite 没有排他约束,改为 `bookings` 上的 **BEFORE INSERT/UPDATE 触发
   text + html)与 rejected/unknown/not-configured 三个分支;本地默认走 console,不发真信。
 - 线上自测:注册一个邮箱,应收到 `hello@idoris.ai` 发出的验证信;链接可直接完成验证。
 
-## 7. M2 已交付
+## 7. 登录与邮件链接(一键登录)
+
+邮件里的链接是 `/login/verify?token=...`:
+
+1. 该页面渲染一个隐藏 token 的普通表单,并由 `src/components/auto-submit.tsx` 自动提交
+   (禁用 JS 时保留按钮,仍是一次点击)。
+2. `POST /api/auth/login/verify` 对**浏览器请求**返回 `303 + Set-Cookie`(成功 → `/me?login=ok`,
+   失败 → `/me?login=failed`);对 API 客户端(要 JSON)返回 JSON。
+3. `/me` 对四种情况给出明确文案:邮箱格式错、链接已失效、链接已接受但 cookie 未保留、已发送。
+
+**为什么不是"点链接直接消费 token"**:① 服务端 fetch 拿不到响应的 `Set-Cookie`,曾导致 token 被
+消费却不登录(PR #24 修复);② 邮件客户端/安全扫描器会预抓取 URL,若 GET 就消费一次性 token,
+用户点开时已失效。改为浏览器提交表单同时解决这两点。
+
+**排查手段**:Worker 日志 `wrangler pages deployment tail <deployment-url> --project-name=4seas-communityos`;
+数据库 `auth_tokens` 的 `created_at/consumed_at` 可以还原"用户到底点了哪一封"。
+
+## 8. M2 已交付
 
 | 能力 | 状态 | 说明 |
 | --- | --- | --- |

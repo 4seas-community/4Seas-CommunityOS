@@ -138,10 +138,18 @@
 
 ---
 
-## 10. 下一步行动(进行中)
+## 10. 下一步行动(2026-09-29 更新)
 
-1. [进行中] CAS 基础版本并行开发(按 06 文档,在 Community-Account-System 仓库)。
-2. [进行中] 本系统 M0 工程骨架 + CAS 客户端(mock 契约先行)。
-3. [待办] 整理 4Seas 现有场地清单与历史活动作为种子数据。
-4. [待办] 与 4seas-bot 维护者确认适配器 PR 计划(见 04 第 4 节)。
-5. [待办] 确认 Luma 订阅等级(Q3)与 Social Layer 服务账号(Q4)。
+**已完成**:M0 地基、M1 运营闭环、M2 分发与 Agent 的代码与测试;数据库迁移到 Cloudflare D1;
+事务邮件经 Resend;`/admin` 控制台第二批 2.1/2.2(审批队列与占用网格)。
+
+1. [进行中] **第二批 2.3 – 2.6**(运营可见性:通知记录、Agent key 管理、数据导出、审计日志)——
+   逐项规格与验收标准见 `docs/11-handoff.md` §6。
+2. [待办] 确认品牌名(4Seas Community 还是 Forty Community),一处环境变量即可切换。
+3. [待办] Luma 单向发布的真实对接(需 Luma Plus API key,见 docs/09)。
+4. [待办] Social Layer 服务账号 JWT 与真实同步(见 docs/04 §3、docs/09)。
+5. [待办] 4seas-bot 维护者合并适配器 PR(本系统侧 feed 已就绪)。
+6. [待办] CAS 真实部署与联调(Community-Account-System 仓库,docs/06)。
+7. [待办] 第二批结束后按 docs/02 §3 与本文档做一次全量范围复查。
+
+> 接手入口:`docs/11-handoff.md`(环境、命令、陷阱、文件地图)。
