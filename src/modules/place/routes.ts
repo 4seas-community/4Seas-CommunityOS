@@ -1,10 +1,16 @@
 /**
  * Place module routes (docs/03 §6):
+ *   GET    /api/buildings
+ *   POST   /api/buildings                  [admin]
+ *   GET    /api/buildings/{id}
+ *   PATCH  /api/buildings/{id}             [admin]
+ *   POST   /api/floors                     [admin]
+ *   PATCH  /api/floors/{id}                [admin]
  *   GET    /api/venues
- *   POST   /api/venues                     [venue_manager]
+ *   POST   /api/venues                     [admin]
  *   GET    /api/venues/{id}                (includes current rules)
- *   PATCH  /api/venues/{id}                [venue_manager]
- *   PUT    /api/venues/{id}/rules          [venue_manager] (new version)
+ *   PATCH  /api/venues/{id}                [venue_manager of that venue]
+ *   PUT    /api/venues/{id}/rules          [venue_manager of that venue] (new version)
  *   GET    /api/venues/{id}/availability?from&to
  */
 import type { Router } from '../../lib/http';
@@ -18,6 +24,45 @@ function requireSession(s: SessionPayload | null): SessionPayload {
 }
 
 export function registerPlaceRoutes(router: Router): void {
+  // ------------------------------------------------------ buildings & floors
+  router.get('/api/buildings', async () => {
+    return json({ buildings: await service.listBuildings() });
+  });
+
+  router.get('/api/buildings/:id', async (_req, ctx) => {
+    const detail = await service.getBuilding(ctx.params.id);
+    return json({ building: detail.building, floors: detail.floors, venues: detail.venues });
+  });
+
+  router.post('/api/buildings', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    const input = service.buildingCreateSchema.parse(await req.json().catch(() => ({})));
+    const building = await service.createBuilding(input, session);
+    return json({ building }, 201, { 'x-audit-logged': '1' });
+  });
+
+  router.patch('/api/buildings/:id', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    const input = service.buildingUpdateSchema.parse(await req.json().catch(() => ({})));
+    const building = await service.updateBuilding(ctx.params.id, input, session);
+    return json({ building }, 200, { 'x-audit-logged': '1' });
+  });
+
+  router.post('/api/floors', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    const input = service.floorCreateSchema.parse(await req.json().catch(() => ({})));
+    const floor = await service.createFloor(input, session);
+    return json({ floor }, 201, { 'x-audit-logged': '1' });
+  });
+
+  router.patch('/api/floors/:id', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    const input = service.floorUpdateSchema.parse(await req.json().catch(() => ({})));
+    const floor = await service.updateFloor(ctx.params.id, input, session);
+    return json({ floor }, 200, { 'x-audit-logged': '1' });
+  });
+
+  // ---------------------------------------------------------------- venues
   router.get('/api/venues', async (req, ctx) => {
     const buildingId = ctx.url.searchParams.get('building') ?? undefined;
     const floorId = ctx.url.searchParams.get('floor') ?? undefined;

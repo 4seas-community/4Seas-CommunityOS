@@ -4,7 +4,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../lib/db';
-import { buildings, floors, venueRules, venues, type Venue } from './schema';
+import { buildings, communities, floors, venueRules, venues, type Venue } from './schema';
 import { computeAvailableSlots, isWithinOpeningHours } from '../../lib/time';
 import { bookings, ACTIVE_BOOKING_STATUSES } from '../booking/schema';
 import { notFound, unprocessable } from '../../lib/errors';
@@ -172,3 +172,134 @@ export async function getVenueAvailability(venueId: string, from: Date, to: Date
 
 export { isWithinOpeningHours, computeAvailableSlots };
 export type { Venue };
+
+// ---------------------------------------------------------- buildings & floors
+
+export const buildingCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  address: z.string().max(500).default(''),
+  geo: z.object({ lat: z.number(), lng: z.number() }).nullish(),
+  timezone: z.string().min(1).max(64).default('Asia/Bangkok'),
+  description: z.string().max(2000).nullish(),
+  coverImage: z.string().url().nullish(),
+});
+
+export const buildingUpdateSchema = buildingCreateSchema.partial().extend({
+  status: z.enum(['active', 'maintenance', 'closed']).optional(),
+});
+
+export const floorCreateSchema = z.object({
+  buildingId: z.string().uuid(),
+  name: z.string().min(1).max(120),
+  sortOrder: z.number().int().min(0).max(999).default(0),
+  mapAsset: z.string().url().nullish(),
+});
+
+/** buildingId is immutable — moving a floor between buildings is not supported. */
+export const floorUpdateSchema = floorCreateSchema.partial().omit({ buildingId: true });
+
+export async function listBuildings() {
+  const rows = await db.select().from(buildings);
+  const floorRows = await db.select().from(floors);
+  const venueRows = await db.select().from(venues);
+  return rows
+    .map((b) => ({
+      ...b,
+      floors: floorRows.filter((f) => f.buildingId === b.id).sort((x, y) => x.sortOrder - y.sortOrder),
+      venueCount: venueRows.filter((v) => v.buildingId === b.id).length,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function getBuilding(buildingId: string) {
+  const [b] = await db.select().from(buildings).where(eq(buildings.id, buildingId)).limit(1);
+  if (!b) throw notFound('Building not found');
+  const [floorsForBuilding, venueRows] = await Promise.all([
+    db.select().from(floors).where(eq(floors.buildingId, buildingId)),
+    db.select().from(venues).where(eq(venues.buildingId, buildingId)),
+  ]);
+  return {
+    building: b,
+    floors: floorsForBuilding.sort((x, y) => x.sortOrder - y.sortOrder),
+    venues: venueRows,
+  };
+}
+
+/** Single-community deployment: buildings inherit the first community. */
+async function defaultCommunityId(): Promise<string> {
+  const [c] = await db.select().from(communities).limit(1);
+  if (!c) throw unprocessable('No community configured; run the seed script first');
+  return c.id;
+}
+
+/** Creating buildings/floors is a community-level (admin) operation. */
+export async function createBuilding(input: z.infer<typeof buildingCreateSchema>, actor: SessionPayload) {
+  requireRole(actor, 'admin');
+  const [created] = await db
+    .insert(buildings)
+    .values({ ...input, communityId: await defaultCommunityId() })
+    .returning();
+  await writeAudit({
+    actorType: 'user',
+    actorId: actor.sub,
+    action: 'POST /api/buildings',
+    entityType: 'building',
+    entityId: created.id,
+    after: { building: created },
+  });
+  return created;
+}
+
+export async function updateBuilding(
+  buildingId: string,
+  input: Partial<z.infer<typeof buildingCreateSchema>> & { status?: 'active' | 'maintenance' | 'closed' },
+  actor: SessionPayload,
+) {
+  requireRole(actor, 'admin');
+  await getBuilding(buildingId); // 404 when missing
+  const [updated] = await db
+    .update(buildings)
+    .set({ ...input, updatedAt: new Date() })
+    .where(eq(buildings.id, buildingId))
+    .returning();
+  await writeAudit({
+    actorType: 'user',
+    actorId: actor.sub,
+    action: 'PATCH /api/buildings/' + buildingId,
+    entityType: 'building',
+    entityId: buildingId,
+    after: { building: updated },
+  });
+  return updated;
+}
+
+export async function createFloor(input: z.infer<typeof floorCreateSchema>, actor: SessionPayload) {
+  requireRole(actor, 'admin');
+  await getBuilding(input.buildingId); // 404 when missing
+  const [created] = await db.insert(floors).values(input).returning();
+  await writeAudit({
+    actorType: 'user',
+    actorId: actor.sub,
+    action: 'POST /api/floors',
+    entityType: 'floor',
+    entityId: created.id,
+    after: { floor: created },
+  });
+  return created;
+}
+
+export async function updateFloor(floorId: string, input: { name?: string; sortOrder?: number; mapAsset?: string | null }, actor: SessionPayload) {
+  requireRole(actor, 'admin');
+  const [existing] = await db.select().from(floors).where(eq(floors.id, floorId)).limit(1);
+  if (!existing) throw notFound('Floor not found');
+  const [updated] = await db.update(floors).set({ ...input }).where(eq(floors.id, floorId)).returning();
+  await writeAudit({
+    actorType: 'user',
+    actorId: actor.sub,
+    action: 'PATCH /api/floors/' + floorId,
+    entityType: 'floor',
+    entityId: floorId,
+    after: { floor: updated },
+  });
+  return updated;
+}
