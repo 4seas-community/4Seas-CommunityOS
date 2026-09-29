@@ -141,7 +141,7 @@ pnpm cf:build && pnpm cf:stage && pnpm cf:deploy
   明文只在创建响应里出现一次。
 - **注意**:scope 词表在 `agent/service.ts`;不要回显 keyHash;每次操作写审计。
 
-### 2.5 数据导出(CSV / JSON)
+### 2.5 数据导出(CSV / JSON) ✅ (已完成)
 
 - **现状**:service 层已有 `listEvents`(支持 `status` 过滤)、`listBookings`、`listMembers`、场地查询。
 - **要做**:`GET /api/admin/export?type=events|bookings|venues|members&format=csv|json`(admin 门控),

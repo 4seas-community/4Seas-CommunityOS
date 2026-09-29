@@ -10,11 +10,12 @@
  *   POST   /api/admin/members/{id}/points         { delta, reason }
  */
 import { readJson, type Router } from '../../lib/http';
-import { json, unauthorized } from '../../lib/errors';
+import { json, unauthorized, badRequest } from '../../lib/errors';
 import { z } from 'zod';
 import * as service from './service';
 import * as notifyService from '../notify/service';
 import * as agentService from '../agent/service';
+import * as exportModule from './export';
 import { outboxStatusValues, type OutboxStatus, notificationChannelValues, type NotificationChannel } from '../notify/schema';
 import { requireRole } from '../../lib/auth/roles';
 import { writeAudit } from '../../lib/audit';
@@ -151,5 +152,56 @@ export function registerAdminRoutes(router: Router): void {
     requireRole(session, 'admin');
     const updated = await agentService.revokeKey(ctx.params.id, session.sub);
     return json({ ok: true, revokedId: updated.id }, 200, { 'x-audit-logged': '1' });
+  });
+
+  router.get('/api/admin/export', async (req, ctx) => {
+    const session = requireSession(ctx.session);
+    requireRole(session, 'admin');
+
+    const url = new URL(req.url);
+    const typeParam = url.searchParams.get('type') as exportModule.ExportType | null;
+    const formatParam = url.searchParams.get('format') as exportModule.ExportFormat | null;
+
+    if (!typeParam || !exportModule.EXPORT_TYPES.includes(typeParam)) {
+      throw badRequest('Invalid export type. Allowed: ' + exportModule.EXPORT_TYPES.join(', '));
+    }
+    const format: exportModule.ExportFormat = formatParam === 'json' ? 'json' : 'csv';
+
+    const dataset = await exportModule.getExportDataset(typeParam, session);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `4seas-${typeParam}-${timestamp}.${format}`;
+
+    if (format === 'csv') {
+      const csvContent = exportModule.toCsv(dataset.headers, dataset.rows);
+      return new Response(csvContent, {
+        status: 200,
+        headers: {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': `attachment; filename="${filename}"`,
+          'cache-control': 'no-store',
+        },
+      });
+    }
+
+    return new Response(
+      JSON.stringify(
+        {
+          type: typeParam,
+          exportedAt: new Date().toISOString(),
+          count: dataset.rows.length,
+          data: dataset.rows,
+        },
+        null,
+        2,
+      ),
+      {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'content-disposition': `attachment; filename="${filename}"`,
+          'cache-control': 'no-store',
+        },
+      },
+    );
   });
 }

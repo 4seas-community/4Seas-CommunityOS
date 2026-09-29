@@ -131,6 +131,14 @@ export default async function AdminPage() {
             </p>
           </Link>
         )}
+        {isCommunityAdmin(member) && (
+          <Link className="card" href="/admin/export" style={{ display: 'block' }}>
+            <h3>Data export</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              Download complete CSV or JSON tables for events, bookings, venues, and members.
+            </p>
+          </Link>
+        )}
         <Link className="card" href="/venues" style={{ display: 'block' }}>
           <h3>Public venue list</h3>
           <p className="muted" style={{ margin: 0 }}>
@@ -140,7 +148,7 @@ export default async function AdminPage() {
       </div>
 
       <div className="notice notice-info" style={{ marginTop: 20 }}>
-        Still to come from the batch 2 plan: data export and the audit-log viewer
+        Still to come from the batch 2 plan: the audit-log viewer
         (docs/10-gap-analysis.md §3).
       </div>
     </section>
