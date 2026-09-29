@@ -217,7 +217,14 @@ Social Layer 前端开源(sociallayer-im/seastar-app),其中 packages/sola-sdk �
 
 ## 7. 通知与邮件
 
-- 邮件:本系统直发(事务邮件:Resend/SES);注册验证邮件由 CAS 负责。
+- 邮件:本系统直发。后端 `EMAIL_BACKEND=resend` 走 Resend HTTPS API,
+  **统一以 `iDoris AI <hello@idoris.ai>` 发出**,reply-to `hello@idoris.ai`
+  (与 PowerSalesMan 同一发信身份与同一套品牌外壳;hello@ 收信由 Cloudflare
+  Email Routing 转投)。注册验证与登录链接属于本系统(见 docs/02 §1.2 v3),
+  不再是 CAS 的职责。
+  - `EMAIL_BACKEND=console`(默认)只把信件写进服务端日志与内存 outbox,dev/测试不发真信。
+  - 发送结果区分 `rejected`(Resend 明确拒收,可安全重试)与 `unknown`(请求半途中断,
+    信可能已在路上)—— 避免重试把同一封登录链接发两遍。
 - Telegram:经 4seasbot 拉取 outbox(见第 4 节)。
 - 站内:通知中心存档。
 - 触发矩阵见 02-product-plan.md 5.5。

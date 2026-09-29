@@ -97,12 +97,26 @@ SQLite 没有排他约束,改为 `bookings` 上的 **BEFORE INSERT/UPDATE 触发
 - **URL**:https://4seas-communityos.pages.dev(全部页面/API 200)
 - **数据库**:Cloudflare D1 `4seas-communityos`(`12ec9cbb-8949-476a-b8a4-efd740e1e19f`,APAC/SIN)
 - **绑定**:Pages production `d1_databases.DB`;compatibility_flags = nodejs_compat
-- **Pages secrets**:`SESSION_SECRET`、`BOT_FEED_TOKEN`(`DATABASE_URL` 是 Neon 时代遗留,已不被读取)
+- **Pages secrets**:`SESSION_SECRET`、`BOT_FEED_TOKEN`、`RESEND_API_KEY`(`DATABASE_URL` 是 Neon 时代遗留,已不被读取)
+- **Pages vars**:`EMAIL_BACKEND=resend`、`EMAIL_FROM=iDoris AI <hello@idoris.ai>`、`EMAIL_REPLY_TO=hello@idoris.ai`
 - **凭据**:`CLOUDFLARE_API_TOKEN`(Pages)、`CF_ACCOUNT_ID` 来自 ~/Dev/.env 与 ~/Dev/mycelium/blog/.env,勿入库
 - **管理员**:`demo@4seas.example`(seed)与 `jhfnetboy@gmail.com`(bootstrap);
   线上提升管理员用 `wrangler d1 execute ... --command="UPDATE members SET roles=... WHERE email=..."`
 
-## 6. M2 已交付
+## 6. 邮件(事务邮件直发)
+
+    EMAIL_BACKEND=resend
+    RESEND_API_KEY=re_...        # idoris.ai 的 send-only key,只存在本机 .env 与 Pages secret
+    EMAIL_FROM=iDoris AI <hello@idoris.ai>
+    EMAIL_REPLY_TO=hello@idoris.ai
+
+- 实现:`src/lib/email.ts`(`sendViaResend`);品牌外壳与 PowerSalesMan 的
+  `shared/email-shell.ts` 同源(palette / iDoris 字标 / Doris 头像)。
+- 自测:`pnpm test tests/email.test.ts` —— 注入 fake fetch,钉住 payload(from/to/reply_to/
+  text + html)与 rejected/unknown/not-configured 三个分支;本地默认走 console,不发真信。
+- 线上自测:注册一个邮箱,应收到 `hello@idoris.ai` 发出的验证信;链接可直接完成验证。
+
+## 7. M2 已交付
 
 | 能力 | 状态 | 说明 |
 | --- | --- | --- |
