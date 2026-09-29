@@ -73,7 +73,10 @@ const loginVerify: Handler = async (req) => {
       email: member.email,
       roles: member.roles,
     });
-    if (form) return seeOther('/me', { 'set-cookie': sessionCookie(token) });
+    // The marker lets /me distinguish "not signed in" from "signed in, but this
+    // browser refused to keep the cookie" (private windows and in-app mail
+    // webviews do that) — otherwise both look like the same sign-in form.
+    if (form) return seeOther('/me?login=ok', { 'set-cookie': sessionCookie(token) });
     return json({ member: people.publicMember(member) }, 200, { 'set-cookie': sessionCookie(token) });
   } catch (err) {
     // A used or expired link owes the visitor an explanation, not raw JSON.

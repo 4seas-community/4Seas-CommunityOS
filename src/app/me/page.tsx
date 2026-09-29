@@ -30,14 +30,24 @@ export default async function MePage({ searchParams }: { searchParams: Promise<{
     return (
       <section style={{ maxWidth: 480 }}>
         <h1>Sign in</h1>
-        {login === 'failed' && (
+        {login === 'ok' && (
           <div className="notice notice-error">
-            That sign-in link had already been used or has expired (each link works once). Send yourself a new one
+            <strong>Almost there.</strong> Your sign-in link was accepted, but this browser did not keep the session
+            cookie — private windows and the in-app browser inside some mail apps block cookies. Open the site in a
+            normal browser window (or allow cookies for this domain) and use the link again, or send a fresh one
             below.
           </div>
         )}
+        {login === 'failed' && (
+          <div className="notice notice-error">
+            <strong>That link no longer works.</strong> Sign-in links work exactly once and expire after 15 minutes,
+            so an older email in your inbox fails even when the newest one is fine. Send a fresh link below.
+          </div>
+        )}
         {login === 'link-sent' && (
-          <div className="notice notice-info">Check your inbox — a fresh sign-in link is on its way.</div>
+          <div className="notice notice-info">
+            Check your inbox — a fresh sign-in link is on its way. Use the newest email: every link works only once.
+          </div>
         )}
         <p className="page-sub">Email registration and verification are handled right here — no password needed.</p>
         <div className="card">

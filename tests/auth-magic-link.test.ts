@@ -42,7 +42,8 @@ describe('magic link', () => {
     const res = await router.handle(formPost('/api/auth/login/verify', { token }), '/api/auth/login/verify');
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/me');
+    // ?login=ok is what lets /me tell "cookie refused" apart from "not signed in".
+    expect(res.headers.get('location')).toBe('/me?login=ok');
     const cookie = res.headers.get('set-cookie') ?? '';
     expect(cookie).toContain('cos_session=');
     expect(cookie.toLowerCase()).toContain('httponly');
@@ -54,7 +55,7 @@ describe('magic link', () => {
 
     const first = await router.handle(formPost('/api/auth/login/verify', { token }), '/api/auth/login/verify');
     expect(first.status).toBe(303);
-    expect(first.headers.get('location')).toBe('/me');
+    expect(first.headers.get('location')).toBe('/me?login=ok');
 
     const second = await router.handle(formPost('/api/auth/login/verify', { token }), '/api/auth/login/verify');
     expect(second.status).toBe(303);
