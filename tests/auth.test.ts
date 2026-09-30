@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import * as auth from '../src/modules/auth/service';
 import * as people from '../src/modules/people/service';
 import { lastConsoleEmailTo, tokenFromEmail } from '../src/lib/email';
+import { seedMember } from './helpers';
 
 function tokenFor(email: string): string {
   return tokenFromEmail(lastConsoleEmailTo(email));
@@ -54,9 +55,37 @@ describe('email registration & login', () => {
     await expect(auth.verifyEmail(token)).rejects.toThrow();
   });
 
-  it('does not leak account existence on login request', async () => {
+  it('does not leak account existence on member login request', async () => {
     const unknown = await auth.requestLogin('nobody@example.com');
     expect(unknown.devToken).toBeUndefined();
+  });
+
+  it('validates administrator privileges when target is admin', async () => {
+    // 1. Not found
+    const notFound = await auth.requestLogin('ghost@example.com', { target: 'admin' });
+    expect(notFound.result).toBe('not_found');
+    expect(notFound.devToken).toBeUndefined();
+
+    // 2. Unverified
+    await auth.register({ email: 'unverified-admin@example.com' });
+    const unverified = await auth.requestLogin('unverified-admin@example.com', { target: 'admin' });
+    expect(unverified.result).toBe('unverified');
+
+    // 3. Regular member without admin/venue_manager role
+    await auth.register({ email: 'normal-user@example.com' });
+    await auth.verifyEmail(tokenFor('normal-user@example.com'));
+    const notAdmin = await auth.requestLogin('normal-user@example.com', { target: 'admin' });
+    expect(notAdmin.result).toBe('not_admin');
+    expect(notAdmin.devToken).toBeUndefined();
+
+    // 4. Actual admin gets login token
+    await seedMember('real-admin@example.com', {
+      verified: true,
+      roles: [{ scope: 'community:*', role: 'admin' }],
+    });
+    const sent = await auth.requestLogin('real-admin@example.com', { target: 'admin' });
+    expect(sent.result).toBe('sent');
+    expect(sent.devToken).toBeTruthy();
   });
 });
 

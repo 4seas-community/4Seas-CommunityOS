@@ -32,8 +32,14 @@ async function main() {
   const email = arg.trim().toLowerCase();
   const [member] = await db.select().from(members).where(eq(members.email, email)).limit(1);
   if (!member) {
-    console.error('no member with email ' + email + ' — they must register first');
-    process.exitCode = 1;
+    const roles: RoleEntry[] = [{ scope: 'community:*', role: 'admin' }];
+    await db.insert(members).values({
+      email,
+      emailVerifiedAt: new Date(),
+      roles,
+    });
+    console.log('✓ Created and promoted ' + email + ' to community admin');
+    console.log('  roles:', JSON.stringify(roles));
     closeDb();
     return;
   }

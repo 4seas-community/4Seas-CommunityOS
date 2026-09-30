@@ -18,7 +18,10 @@ const registerSchema = z.object({
 });
 
 const verifyEmailSchema = z.object({ token: z.string().min(10) });
-const loginRequestSchema = z.object({ email: z.string().email() });
+const loginRequestSchema = z.object({
+  email: z.string().email(),
+  target: z.enum(['admin', 'member']).optional(),
+});
 const loginVerifySchema = z.object({ token: z.string().min(10) });
 
 const register: Handler = async (req) => {
@@ -62,7 +65,7 @@ function seeOther(location: string, headers: Record<string, string> = {}): Respo
 
 const loginRequest: Handler = async (req) => {
   const browser = isBrowserNavigation(req);
-  let body: { email: string };
+  let body: { email: string; target?: 'admin' | 'member' };
   try {
     body = await readJson(req, loginRequestSchema);
   } catch (err) {
@@ -70,12 +73,31 @@ const loginRequest: Handler = async (req) => {
     if (browser) return seeOther('/me?login=invalid-email');
     throw err;
   }
-  const res = await auth.requestLogin(body.email);
-  if (browser) return seeOther('/me?login=link-sent');
+  const res = await auth.requestLogin(body.email, { target: body.target });
+  if (browser) {
+    if (body.target === 'admin') {
+      if (res.result === 'not_found') {
+        return seeOther(`/admin?login=not-found&email=${encodeURIComponent(body.email)}`);
+      }
+      if (res.result === 'not_admin') {
+        return seeOther(`/admin?login=not-admin&email=${encodeURIComponent(body.email)}`);
+      }
+      if (res.result === 'unverified') {
+        return seeOther(`/admin?login=unverified&email=${encodeURIComponent(body.email)}`);
+      }
+      return seeOther(`/admin?login=link-sent&email=${encodeURIComponent(body.email)}`);
+    }
+    return seeOther('/me?login=link-sent');
+  }
   // consoleEmail tells the caller whether the link is only in the server log:
   // it must stay false once a real provider is configured, or a client would
   // happily report "check the logs" for a mail that actually went out.
-  return json({ sent: true, devToken: res.devToken ?? null, consoleEmail: config.emailBackend === 'console' }, 202);
+  return json({
+    sent: res.result === 'sent',
+    result: res.result,
+    devToken: res.devToken ?? null,
+    consoleEmail: config.emailBackend === 'console',
+  }, 202);
 };
 
 const loginVerify: Handler = async (req) => {
@@ -88,10 +110,13 @@ const loginVerify: Handler = async (req) => {
       email: member.email,
       roles: member.roles,
     });
+    const roles = member.roles as Array<{ role: string }>;
+    const isAdmin = roles.some((r) => r.role === 'admin' || r.role === 'venue_manager');
+    const destination = isAdmin ? '/admin' : '/me?login=ok';
     // The marker lets /me distinguish "not signed in" from "signed in, but this
     // browser refused to keep the cookie" (private windows and in-app mail
     // webviews do that) — otherwise both look like the same sign-in form.
-    if (browser) return seeOther('/me?login=ok', { 'set-cookie': sessionCookie(token) });
+    if (browser) return seeOther(destination, { 'set-cookie': sessionCookie(token) });
     return json({ member: people.publicMember(member) }, 200, { 'set-cookie': sessionCookie(token) });
   } catch (err) {
     // A used or expired link owes the visitor an explanation, not raw JSON.

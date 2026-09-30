@@ -108,15 +108,39 @@ export async function verifyEmail(token: string) {
   return { memberId: updated.id, email: updated.email, verified: true };
 }
 
-/** Always returns success from the caller's perspective (no account enumeration). */
-export async function requestLogin(email: string): Promise<{ devToken?: string }> {
+export interface RequestLoginOptions {
+  target?: 'admin' | 'member';
+}
+
+export type RequestLoginResult = {
+  devToken?: string;
+  result?: 'sent' | 'not_found' | 'not_admin' | 'unverified';
+};
+
+/** Always returns success from the caller's perspective on member login; validates role when target=admin. */
+export async function requestLogin(email: string, opts?: RequestLoginOptions): Promise<RequestLoginResult> {
   const normalized = email.trim().toLowerCase();
   const member = await people.findMemberByEmail(normalized);
+
+  if (opts?.target === 'admin') {
+    if (!member) {
+      return { result: 'not_found' };
+    }
+    if (!member.emailVerifiedAt) {
+      return { result: 'unverified' };
+    }
+    const roles = member.roles as Array<{ role: string; scope: string }>;
+    const hasAdminAccess = roles.some((r) => r.role === 'admin' || r.role === 'venue_manager');
+    if (!hasAdminAccess) {
+      return { result: 'not_admin' };
+    }
+  }
+
   if (member?.emailVerifiedAt) {
     const token = await issueToken(normalized, 'login');
     const sent = await sendEmail({
       to: normalized,
-      subject: 'Your 4Seas login link',
+      subject: opts?.target === 'admin' ? 'Your 4Seas Admin login link' : 'Your 4Seas login link',
       body:
         'Here is your login link for 4Seas:\n\n' +
         config.appUrl + '/login/verify?token=' + token + '\n\n' +
@@ -126,9 +150,11 @@ export async function requestLogin(email: string): Promise<{ devToken?: string }
     // Dev convenience ONLY: with the console email backend the token is already
     // written to the server log, so returning it over HTTP adds no new exposure.
     // In production this must never happen — that would be account takeover.
-    if (isDevelopment && config.emailBackend === 'console') return { devToken: token };
+    if (isDevelopment && config.emailBackend === 'console') return { devToken: token, result: 'sent' };
+    return { result: 'sent' };
   }
-  return {};
+
+  return { result: 'not_found' };
 }
 
 /** Consume a login token and return the member to sign a session for. */

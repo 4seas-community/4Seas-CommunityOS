@@ -10,27 +10,88 @@ interface Overview {
   queues: { bookingsPending: number; eventsPendingReview: number; bookingsUpcoming: number };
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ login?: string; email?: string }>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const { login, email } = params;
   const member = await getCurrentMember();
+
   if (!canUseAdmin(member)) {
     return (
       <section style={{ maxWidth: 560 }}>
         <h1>Admin console</h1>
-        <div className="notice notice-warn">
-          You need a venue manager or community admin role to use the operations console.
-        </div>
+
+        {login === 'not-found' && (
+          <div className="notice notice-error" style={{ marginBottom: 16 }}>
+            <strong>No administrator account found.</strong> There is no registered account for{' '}
+            <strong>{email}</strong>. If this should be an administrator, promote the account first:
+            <div style={{ marginTop: 8 }}>
+              <code>pnpm tsx scripts/make-admin.ts {email}</code>
+            </div>
+          </div>
+        )}
+
+        {login === 'not-admin' && (
+          <div className="notice notice-error" style={{ marginBottom: 16 }}>
+            <strong>Not an administrator.</strong> The account <strong>{email}</strong> is registered,
+            but does not have <code>admin</code> or <code>venue_manager</code> privileges. An existing
+            admin can grant roles in the console, or you can run:
+            <div style={{ marginTop: 8 }}>
+              <code>pnpm tsx scripts/make-admin.ts {email}</code>
+            </div>
+          </div>
+        )}
+
+        {login === 'unverified' && (
+          <div className="notice notice-warn" style={{ marginBottom: 16 }}>
+            <strong>Email not verified.</strong> The account for <strong>{email}</strong> exists but its email
+            is not yet verified. Please complete verification before signing in to the console.
+          </div>
+        )}
+
+        {login === 'link-sent' && (
+          <div className="notice notice-ok" style={{ marginBottom: 16 }}>
+            <strong>Admin login link sent!</strong> Check your inbox at <strong>{email}</strong>.
+            Click the link in the email to sign directly into the Operations Console.
+          </div>
+        )}
+
+        {!login && (
+          <div className="notice notice-warn">
+            You need a venue manager or community admin role to use the operations console.
+          </div>
+        )}
+
         {!member ? (
           <div className="card" style={{ marginTop: 16 }}>
-            <p style={{ margin: '0 0 14px' }}>
-              You are not signed in. Please sign in with an account that has admin privileges.
+            <h3 style={{ margin: '0 0 8px' }}>Sign in as Administrator</h3>
+            <p className="muted" style={{ margin: '0 0 16px', fontSize: 14 }}>
+              Enter your admin or venue manager email. We will verify your permissions and send a direct sign-in link.
             </p>
-            <Link href="/me" className="btn btn-primary">
-              Sign in to continue
-            </Link>
+            <form method="post" action="/api/auth/login/request">
+              <input type="hidden" name="target" value="admin" />
+              <label htmlFor="admin-email">Administrator Email</label>
+              <input
+                id="admin-email"
+                name="email"
+                type="email"
+                required
+                defaultValue={email ?? ''}
+                placeholder="admin@example.com"
+              />
+              <div style={{ marginTop: 18 }}>
+                <button type="submit" className="btn btn-primary">
+                  Send admin login link
+                </button>
+              </div>
+            </form>
           </div>
         ) : (
           <p className="muted" style={{ marginTop: 16 }}>
-            Signed in as <strong>{member.email}</strong>. An existing admin can grant roles from{' '}
+            Signed in as <strong>{member.email}</strong>. You do not have permissions to view this console. An existing admin can grant roles from{' '}
             <Link href="/admin/members">Members</Link>; on a fresh deployment run{' '}
             <code>pnpm tsx scripts/make-admin.ts {member.email}</code>.
           </p>
