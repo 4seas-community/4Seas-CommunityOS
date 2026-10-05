@@ -158,8 +158,13 @@ export async function readJson<T>(req: Request, schema: { parse: (v: unknown) =>
   try {
     return schema.parse(raw);
   } catch (err) {
-    // Zod errors would otherwise surface as a generic 500.
-    throw badRequest('Invalid request body: ' + (err as Error).message.slice(0, 300));
+    // Zod errors would otherwise surface as a generic 500. Summarise issues as
+    // "field: message" instead of dumping the raw JSON (which leaked regexes to users).
+    const issues = (err as { issues?: Array<{ path: PropertyKey[]; message: string }> }).issues;
+    const detail = issues?.length
+      ? issues.map((i) => (i.path.length ? i.path.join('.') + ': ' : '') + i.message).join('; ')
+      : (err as Error).message;
+    throw badRequest('Invalid request body: ' + detail.slice(0, 300));
   }
 }
 

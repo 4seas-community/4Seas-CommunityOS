@@ -1,5 +1,6 @@
 import { apiGet } from '../../lib/api-client';
 import { CreateEventForm } from '../../components/forms';
+import { config } from '../../lib/config';
 
 interface VenueOption {
   id: string;
@@ -26,7 +27,10 @@ export default async function CreateEventPage() {
       </p>
 
       <div className="card">
-        <CreateEventForm venues={venues.map((v) => ({ id: v.id, name: v.name, building: v.building?.name ?? null }))} />
+        <CreateEventForm
+          timezone={config.defaultTimezone}
+          venues={venues.map((v) => ({ id: v.id, name: v.name, building: v.building?.name ?? null }))}
+        />
       </div>
 
       <div className="notice notice-info">
