@@ -40,3 +40,41 @@ describe('withVenueSummaries', () => {
     await expect(eventService.withVenueSummaries([])).resolves.toEqual([]);
   });
 });
+
+describe('GET /api/events', () => {
+  it('returns rows with venue summaries through the real route', async () => {
+    const { Router } = await import('../src/lib/http');
+    const { registerEventRoutes } = await import('../src/modules/event/routes');
+    const community = await seedCommunity();
+    const { venue, building } = await seedVenue(community.id);
+    const host = await seedMember('host@test.dev', {
+      roles: [
+        { scope: 'community:*', role: 'member' },
+        { scope: 'venue:' + venue.id, role: 'venue_manager' },
+      ],
+    });
+    const session = sessionFor(host.id, host.roles);
+    const { event } = await eventService.createEvent(
+      {
+        title: 'At venue',
+        startAt: new Date(tomorrowUtc + 3 * 3600000).toISOString(),
+        endAt: new Date(tomorrowUtc + 5 * 3600000).toISOString(),
+        tags: ['community'],
+        venueId: venue.id,
+      },
+      session,
+    );
+    await eventService.publishEvent(event.id, session);
+
+    const router = new Router();
+    registerEventRoutes(router);
+    const res = await router.handle(new Request('http://test.local/api/events?view=list'), '/api/events');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { events: Array<{ id: string; venue: unknown }> };
+    expect(body.events.find((e) => e.id === event.id)?.venue).toEqual({
+      id: venue.id,
+      name: venue.name,
+      building: { name: building.name },
+    });
+  });
+});
