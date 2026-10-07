@@ -47,7 +47,7 @@ export function registerEventRoutes(router: Router): void {
       },
       ctx.session,
     );
-    return json({ events });
+    return json({ events: await service.withVenueSummaries(events) });
   });
 
   router.get('/api/events/:id', async (_req, ctx) => {
