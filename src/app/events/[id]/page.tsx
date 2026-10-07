@@ -1,44 +1,31 @@
 import { apiGet } from '../../../lib/api-client';
 import { DateBlock } from '../../../components/event-card';
 import { RegisterButton } from '../../../components/forms';
+import type { getEvent } from '../../../modules/event/service';
 
-interface EventDetail {
-  id: string;
-  title: string;
-  description: string | null;
-  startAt: string;
-  endAt: string;
-  timezone: string;
-  eventType: string;
-  status: string;
-  visibility: string;
-  maxCapacity: number | null;
-  suggestedAttendees: number | null;
-  entryRequirements: string | null;
-  transportInfo: string | null;
-  isPaid: string;
-  tags: string[];
-  checkinMode: string;
-  checkinClaimCap: number | null;
-  venue: { id: string; name: string; building: { name: string } | null } | null;
-  host: { id: string; displayName: string | null; email: string } | null;
-  registrationCount: number;
-  checkedInCount: number;
-}
+/** Wire shape of GET /api/events/:id — derived from the service so the two can't drift. */
+type Jsonified<T> = T extends Date
+  ? string
+  : T extends (infer U)[]
+    ? Jsonified<U>[]
+    : T extends object
+      ? { [K in keyof T]: Jsonified<T[K]> }
+      : T;
+type EventDetailResponse = Jsonified<Awaited<ReturnType<typeof getEvent>>>;
 
 export const dynamic = 'force-dynamic';
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  let ev: EventDetail | null = null;
+  let detail: EventDetailResponse | null = null;
   let error: string | null = null;
   try {
-    ev = await apiGet<EventDetail>('/api/events/' + id);
+    detail = await apiGet<EventDetailResponse>('/api/events/' + id);
   } catch (e) {
     error = (e as Error).message;
   }
 
-  if (error || !ev) {
+  if (error || !detail) {
     return (
       <section>
         <h1>Event not found</h1>
@@ -50,6 +37,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
     );
   }
 
+  const { event: ev, venue, host, registrationCount } = detail;
   const start = new Date(ev.startAt);
   const end = new Date(ev.endAt);
 
@@ -74,12 +62,12 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           </div>
           <div className="row" style={{ marginTop: 10, gap: 8 }}>
             <span className="badge badge-brand">
-              {ev.venue ? ev.venue.name + (ev.venue.building ? ' · ' + ev.venue.building.name : '') : 'Online / external'}
+              {venue ? venue.name + (venue.buildingName ? ' · ' + venue.buildingName : '') : (ev.externalLocation ?? 'Online / external')}
             </span>
             <span className="badge">{ev.eventType.replace('_', ' ')}</span>
             {ev.isPaid !== 'free' && <span className="badge badge-accent">Paid · {ev.isPaid}</span>}
             {ev.maxCapacity && <span className="badge">Cap {ev.maxCapacity}</span>}
-            <span className="badge badge-ok">{ev.registrationCount} going</span>
+            <span className="badge badge-ok">{registrationCount} going</span>
           </div>
           {ev.tags.length > 0 && (
             <div className="tag-row">
@@ -97,7 +85,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         <h3>About</h3>
         <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{ev.description || 'No description yet.'}</p>
         <p className="muted" style={{ marginTop: 12 }}>
-          Hosted by {ev.host?.displayName ?? ev.host?.email ?? 'a community member'}
+          Hosted by {host?.displayName ?? 'a community member'}
         </p>
       </div>
 
