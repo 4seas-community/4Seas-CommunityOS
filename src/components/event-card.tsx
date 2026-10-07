@@ -3,17 +3,21 @@
  * Server components only — no client JS needed for the M0 surface.
  */
 import Link from 'next/link';
+import { config } from '../lib/config';
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-export function DateBlock({ start }: { start: string }) {
+/**
+ * Dates render in the event's own timezone, not the server's (UTC on Workers),
+ * so an early-morning Bangkok event doesn't show up on the previous day.
+ */
+export function DateBlock({ start, timezone }: { start: string; timezone?: string | null }) {
   const d = new Date(start);
+  const part = (opts: Intl.DateTimeFormatOptions) =>
+    d.toLocaleString('en-GB', { ...opts, timeZone: timezone ?? config.defaultTimezone });
   return (
     <div className="date-block" aria-hidden="true">
-      <span className="d-mon">{MONTHS[d.getMonth()]}</span>
-      <span className="d-day">{d.getDate()}</span>
-      <span className="d-week">{WEEKDAYS[d.getDay()]}</span>
+      <span className="d-mon">{part({ month: 'short' })}</span>
+      <span className="d-day">{part({ day: 'numeric' })}</span>
+      <span className="d-week">{part({ weekday: 'short' })}</span>
     </div>
   );
 }
@@ -23,6 +27,7 @@ export interface EventCardData {
   title: string;
   startAt: string;
   endAt: string;
+  timezone?: string | null;
   eventType: string;
   isPaid: string;
   tags: string[];
@@ -33,13 +38,13 @@ export function EventCard({ ev }: { ev: EventCardData }) {
   const where = ev.venue ? ev.venue.name + (ev.venue.building ? ' · ' + ev.venue.building.name : '') : 'Online / external';
   return (
     <article className="card event-card">
-      <DateBlock start={ev.startAt} />
+      <DateBlock start={ev.startAt} timezone={ev.timezone} />
       <div style={{ minWidth: 0 }}>
         <Link className="ev-title" href={'/events/' + ev.id}>
           {ev.title}
         </Link>
         <div className="ev-meta">
-          <span>{formatTime(ev.startAt)} – {formatTime(ev.endAt)}</span>
+          <span>{formatTime(ev.startAt, ev.timezone)} – {formatTime(ev.endAt, ev.timezone)}</span>
           <span aria-hidden="true">·</span>
           <span>{where}</span>
           {ev.isPaid !== 'free' && <span className="badge badge-accent">Paid</span>}
@@ -71,7 +76,7 @@ export function EmptyState({ emoji, title, hint }: { emoji: string; title: strin
   );
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, timezone?: string | null): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: timezone ?? config.defaultTimezone });
 }

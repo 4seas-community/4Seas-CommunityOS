@@ -72,3 +72,25 @@ describe('datetime-local -> UTC conversion', () => {
     expect(zonedTimeToUtc('2026-10-07', '05:30', 'Asia/Bangkok').toISOString()).toBe('2026-10-06T22:30:00.000Z');
   });
 });
+
+describe('zonedTimeToUtc across DST transitions', () => {
+  it('uses the post-switch offset just after spring-forward', () => {
+    // 03:30 EDT (UTC-4); a single-pass lookup at the naive guess saw EST and gave 08:30Z.
+    expect(zonedTimeToUtc('2026-03-08', '03:30', 'America/New_York').toISOString()).toBe('2026-03-08T07:30:00.000Z');
+  });
+
+  it('maps a non-existent wall time in the spring-forward gap to the instant after it', () => {
+    // 02:30 doesn't exist on 2026-03-08 in New York; 07:30Z is 03:30 EDT.
+    expect(zonedTimeToUtc('2026-03-08', '02:30', 'America/New_York').toISOString()).toBe('2026-03-08T07:30:00.000Z');
+  });
+
+  it('picks the first occurrence of an ambiguous fall-back wall time', () => {
+    // 01:30 happens twice on 2026-11-01; the first is 01:30 EDT = 05:30Z.
+    expect(zonedTimeToUtc('2026-11-01', '01:30', 'America/New_York').toISOString()).toBe('2026-11-01T05:30:00.000Z');
+  });
+
+  it('handles ordinary times on either side of DST', () => {
+    expect(zonedTimeToUtc('2026-01-15', '10:00', 'America/New_York').toISOString()).toBe('2026-01-15T15:00:00.000Z');
+    expect(zonedTimeToUtc('2026-07-15', '10:00', 'America/New_York').toISOString()).toBe('2026-07-15T14:00:00.000Z');
+  });
+});

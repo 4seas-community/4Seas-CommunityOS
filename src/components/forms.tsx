@@ -71,13 +71,13 @@ export function LoginForm() {
   );
 }
 
-/** Quick event creation (title + time + venue). */
 /** "YYYY-MM-DDTHH:MM" from <input type="datetime-local">, read as wall time in tz -> UTC ISO. */
 function localInputToIso(value: string, timezone: string): string {
   const [date, time] = value.split('T');
   return zonedTimeToUtc(date, time, timezone).toISOString();
 }
 
+/** Quick event creation (title + time + venue). */
 export function CreateEventForm({
   venues,
   timezone,

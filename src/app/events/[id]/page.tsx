@@ -62,14 +62,14 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
       </p>
 
       <div className="card" style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
-        <DateBlock start={ev.startAt} />
+        <DateBlock start={ev.startAt} timezone={ev.timezone} />
         <div style={{ minWidth: 0, flex: 1 }}>
           <h1 style={{ marginBottom: 4 }}>{ev.title}</h1>
           <div className="ev-meta">
             <span>
-              {start.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Asia/Bangkok' })}
+              {start.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: ev.timezone })}
               {' → '}
-              {end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })}
+              {end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: ev.timezone })}
             </span>
           </div>
           <div className="row" style={{ marginTop: 10, gap: 8 }}>

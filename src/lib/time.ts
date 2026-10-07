@@ -37,12 +37,21 @@ function tzOffsetMs(date: Date, timezone: string): number {
   return asUTC - date.getTime();
 }
 
-/** Convert a wall-clock date ("YYYY-MM-DD") + time ("HH:MM") in tz to a UTC Date. */
+/**
+ * Convert a wall-clock date ("YYYY-MM-DD") + time ("HH:MM") in tz to a UTC Date.
+ * The offset is looked up twice: the first lookup happens at the naive guess,
+ * which near a DST switch can land on the other side of it. A wall time that
+ * doesn't exist (spring-forward gap) resolves to the instant after the gap.
+ */
 export function zonedTimeToUtc(dateStr: string, time: string, timezone: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [hh, mm] = time.split(':').map(Number);
   const guess = Date.UTC(y, m - 1, d, hh, mm);
-  return new Date(guess - tzOffsetMs(new Date(guess), timezone));
+  const first = guess - tzOffsetMs(new Date(guess), timezone);
+  const offset = tzOffsetMs(new Date(first), timezone);
+  const second = guess - offset;
+  // Offsets disagree only inside a gap; `first` is then the post-gap instant.
+  return new Date(tzOffsetMs(new Date(second), timezone) === offset ? second : first);
 }
 
 /** Wall-clock date key ("YYYY-MM-DD") of an instant in tz. */
