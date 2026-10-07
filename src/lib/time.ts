@@ -29,6 +29,16 @@ function partsFormatter(timezone: string): Intl.DateTimeFormat {
   return f;
 }
 
+/** True when Intl recognises `timezone` (formatting with an unknown zone throws RangeError). */
+export function isValidTimezone(timezone: string): boolean {
+  try {
+    partsFormatter(timezone);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Offset (ms) of timezone at the given instant: local-wall-time(UTC) - utc. */
 function tzOffsetMs(date: Date, timezone: string): number {
   const parts = partsFormatter(timezone).formatToParts(date);
@@ -37,12 +47,25 @@ function tzOffsetMs(date: Date, timezone: string): number {
   return asUTC - date.getTime();
 }
 
-/** Convert a wall-clock date ("YYYY-MM-DD") + time ("HH:MM") in tz to a UTC Date. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Convert a wall-clock date ("YYYY-MM-DD") + time ("HH:MM") in tz to a UTC Date.
+ * Tries the offsets in force a day either side (no zone switches twice within
+ * two days) and keeps the candidates that are self-consistent:
+ * - two valid (fall-back overlap): the earlier instant, i.e. the first occurrence;
+ * - none valid (spring-forward gap): the wall time read with the pre-switch
+ *   offset, which lands just after the gap.
+ * Both rules hold regardless of which side of UTC the zone is on.
+ */
 export function zonedTimeToUtc(dateStr: string, time: string, timezone: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [hh, mm] = time.split(':').map(Number);
   const guess = Date.UTC(y, m - 1, d, hh, mm);
-  return new Date(guess - tzOffsetMs(new Date(guess), timezone));
+  const before = tzOffsetMs(new Date(guess - DAY_MS), timezone);
+  const after = tzOffsetMs(new Date(guess + DAY_MS), timezone);
+  const valid = [guess - before, guess - after].filter((t) => guess - tzOffsetMs(new Date(t), timezone) === t);
+  return new Date(valid.length ? Math.min(...valid) : guess - before);
 }
 
 /** Wall-clock date key ("YYYY-MM-DD") of an instant in tz. */
