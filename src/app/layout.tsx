@@ -11,6 +11,15 @@ export const metadata: Metadata = {
     template: '%s · 4Seas CommunityOS',
   },
   description: 'Organize the Place, Event, and People for Community.',
+  // Static files in public/, not app/ icon routes: on Pages, _routes.json sends
+  // *.png/*.ico to static assets, where generated icon routes don't exist (404).
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '48x48' },
+      { url: '/icon.png', type: 'image/png', sizes: '32x32' },
+    ],
+    apple: { url: '/apple-icon.png', sizes: '180x180' },
+  },
 };
 
 const NAV = [
