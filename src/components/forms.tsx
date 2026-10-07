@@ -7,6 +7,7 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { zonedTimeToUtc } from '../lib/time';
 
 function useSubmit() {
   const router = useRouter();
@@ -71,7 +72,19 @@ export function LoginForm() {
 }
 
 /** Quick event creation (title + time + venue). */
-export function CreateEventForm({ venues }: { venues: Array<{ id: string; name: string; building: string | null }> }) {
+/** "YYYY-MM-DDTHH:MM" from <input type="datetime-local">, read as wall time in tz -> UTC ISO. */
+function localInputToIso(value: string, timezone: string): string {
+  const [date, time] = value.split('T');
+  return zonedTimeToUtc(date, time, timezone).toISOString();
+}
+
+export function CreateEventForm({
+  venues,
+  timezone,
+}: {
+  venues: Array<{ id: string; name: string; building: string | null }>;
+  timezone: string;
+}) {
   const [title, setTitle] = useState('');
   const [startAt, setStartAt] = useState('');
   const [endAt, setEndAt] = useState('');
@@ -83,7 +96,12 @@ export function CreateEventForm({ venues }: { venues: Array<{ id: string; name: 
     <form
       onSubmit={async (e) => {
         e.preventDefault();
-        const body: Record<string, unknown> = { title, startAt, endAt };
+        const body: Record<string, unknown> = {
+          title,
+          startAt: localInputToIso(startAt, timezone),
+          endAt: localInputToIso(endAt, timezone),
+          timezone,
+        };
         if (venueId) body.venueId = venueId;
         if (tags.trim()) body.tags = tags.split(',').map((t) => t.trim()).filter(Boolean);
         await send('/api/events', body, 'Draft created — publish it from the event page when you are ready.');
@@ -93,11 +111,20 @@ export function CreateEventForm({ venues }: { venues: Array<{ id: string; name: 
       <label htmlFor="title">Title</label>
       <input id="title" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Language Corner" />
 
-      <label htmlFor="startAt">Starts (ISO, e.g. 2026-10-01T10:00:00+07:00)</label>
-      <input id="startAt" required value={startAt} onChange={(e) => setStartAt(e.target.value)} placeholder="2026-10-01T10:00:00+07:00" />
+      <label htmlFor="startAt">Starts ({timezone})</label>
+      <input
+        id="startAt"
+        type="datetime-local"
+        required
+        value={startAt}
+        onChange={(e) => {
+          setStartAt(e.target.value);
+          if (!endAt || endAt <= e.target.value) setEndAt(e.target.value);
+        }}
+      />
 
-      <label htmlFor="endAt">Ends</label>
-      <input id="endAt" required value={endAt} onChange={(e) => setEndAt(e.target.value)} placeholder="2026-10-01T12:00:00+07:00" />
+      <label htmlFor="endAt">Ends ({timezone})</label>
+      <input id="endAt" type="datetime-local" required min={startAt || undefined} value={endAt} onChange={(e) => setEndAt(e.target.value)} />
 
       <label htmlFor="venueId">Venue</label>
       <select id="venueId" value={venueId} onChange={(e) => setVenueId(e.target.value)}>

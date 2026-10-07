@@ -23,7 +23,8 @@ import { writeAudit } from '../../lib/audit';
 
 // ---------------------------------------------------------------- validation
 
-const iso = z.string().datetime();
+// Accept explicit offsets ("+07:00") as well as "Z" — the UI sends community-local times.
+const iso = z.string().datetime({ offset: true });
 
 export const eventCreateSchema = z
   .object({

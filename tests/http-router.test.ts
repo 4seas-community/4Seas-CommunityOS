@@ -49,6 +49,13 @@ describe('router error contract', () => {
     await expect(res.json()).resolves.toMatchObject({ error: { code: 'bad_request' } });
   });
 
+  it('summarises validation issues as "field: message" instead of dumping raw Zod JSON', async () => {
+    const res = await buildRouter().handle(jsonPost('/api/thing', { name: 'x' }), '/api/thing');
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toMatch(/^Invalid request body: name: /);
+    expect(body.error.message).not.toContain('"code"');
+  });
+
   it('accepts a valid body', async () => {
     const res = await buildRouter().handle(jsonPost('/api/thing', { name: 'valid' }), '/api/thing');
     expect(res.status).toBe(201);

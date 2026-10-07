@@ -24,8 +24,8 @@ import { chargeBooking, refundBooking } from './points';
 
 export const bookingCreateSchema = z.object({
   venueId: z.string().uuid(),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
+  startAt: z.string().datetime({ offset: true }),
+  endAt: z.string().datetime({ offset: true }),
   purpose: z.string().max(500).default(''),
   attendeesCount: z.number().int().min(1).default(1),
   eventId: z.string().uuid().nullable().optional(),
