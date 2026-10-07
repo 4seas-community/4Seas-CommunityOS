@@ -245,6 +245,23 @@ export async function listEvents(
   });
 }
 
+/**
+ * Attach `venue: { id, name, building }` to list rows (two batched queries).
+ * Event cards read `ev.venue`; raw rows only carry venueId, so every card fell
+ * back to "Online / external".
+ */
+export async function withVenueSummaries<T extends Event>(rows: T[]) {
+  const venueIds = [...new Set(rows.map((e) => e.venueId).filter((id): id is string => id !== null))];
+  const venueRows = venueIds.length ? await db.select().from(venues).where(inArray(venues.id, venueIds)) : [];
+  const buildingIds = [...new Set(venueRows.map((v) => v.buildingId))];
+  const buildingRows = buildingIds.length ? await db.select().from(buildings).where(inArray(buildings.id, buildingIds)) : [];
+  const buildingById = new Map(buildingRows.map((b) => [b.id, { name: b.name }]));
+  const venueById = new Map(
+    venueRows.map((v) => [v.id, { id: v.id, name: v.name, building: buildingById.get(v.buildingId) ?? null }]),
+  );
+  return rows.map((e) => ({ ...e, venue: e.venueId ? (venueById.get(e.venueId) ?? null) : null }));
+}
+
 export async function getEvent(eventId: string, actor: SessionPayload | null = null) {
   const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
   if (!event) throw notFound('Event not found');
