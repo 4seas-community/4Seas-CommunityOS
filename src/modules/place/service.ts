@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '../../lib/db';
 import { buildings, communities, floors, venueRules, venues, type Venue } from './schema';
 import { computeAvailableSlots, isWithinOpeningHours } from '../../lib/time';
+import { ianaTimezone } from '../../lib/timezone';
 import { bookings, ACTIVE_BOOKING_STATUSES } from '../booking/schema';
 import { notFound, unprocessable } from '../../lib/errors';
 import type { SessionPayload } from '../../lib/auth/session';
@@ -179,7 +180,7 @@ export const buildingCreateSchema = z.object({
   name: z.string().min(1).max(200),
   address: z.string().max(500).default(''),
   geo: z.object({ lat: z.number(), lng: z.number() }).nullish(),
-  timezone: z.string().min(1).max(64).default('Asia/Bangkok'),
+  timezone: ianaTimezone.default('Asia/Bangkok'),
   description: z.string().max(2000).nullish(),
   coverImage: z.string().url().nullish(),
 });

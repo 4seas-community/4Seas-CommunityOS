@@ -7,6 +7,8 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  // tsconfig uses jsx: "preserve" for Next; tests render components, so transform here.
+  oxc: { jsx: { runtime: 'automatic' } },
   test: {
     environment: 'node',
     globals: true,

@@ -3,7 +3,7 @@
  * Server components only — no client JS needed for the M0 surface.
  */
 import Link from 'next/link';
-import { config } from '../lib/config';
+import { safeTimezone } from '../lib/timezone';
 
 /**
  * Dates render in the event's own timezone, not the server's (UTC on Workers),
@@ -12,7 +12,7 @@ import { config } from '../lib/config';
 export function DateBlock({ start, timezone }: { start: string; timezone?: string | null }) {
   const d = new Date(start);
   const part = (opts: Intl.DateTimeFormatOptions) =>
-    d.toLocaleString('en-GB', { ...opts, timeZone: timezone ?? config.defaultTimezone });
+    d.toLocaleString('en-GB', { ...opts, timeZone: safeTimezone(timezone) });
   return (
     <div className="date-block" aria-hidden="true">
       <span className="d-mon">{part({ month: 'short' })}</span>
@@ -78,5 +78,5 @@ export function EmptyState({ emoji, title, hint }: { emoji: string; title: strin
 
 function formatTime(iso: string, timezone?: string | null): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: timezone ?? config.defaultTimezone });
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: safeTimezone(timezone) });
 }

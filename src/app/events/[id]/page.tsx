@@ -1,5 +1,6 @@
 import { apiGet } from '../../../lib/api-client';
 import { DateBlock } from '../../../components/event-card';
+import { safeTimezone } from '../../../lib/timezone';
 import { RegisterButton } from '../../../components/forms';
 
 interface EventDetail {
@@ -52,6 +53,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
 
   const start = new Date(ev.startAt);
   const end = new Date(ev.endAt);
+  const timeZone = safeTimezone(ev.timezone);
 
   return (
     <article>
@@ -67,9 +69,9 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           <h1 style={{ marginBottom: 4 }}>{ev.title}</h1>
           <div className="ev-meta">
             <span>
-              {start.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: ev.timezone })}
+              {start.toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone })}
               {' → '}
-              {end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: ev.timezone })}
+              {end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone })}
             </span>
           </div>
           <div className="row" style={{ marginTop: 10, gap: 8 }}>

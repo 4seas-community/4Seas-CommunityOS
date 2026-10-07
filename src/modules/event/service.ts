@@ -20,6 +20,7 @@ import { badRequest, conflict, forbidden, notFound, unprocessable } from '../../
 import { hasRole } from '../../lib/auth/roles';
 import type { SessionPayload } from '../../lib/auth/session';
 import { writeAudit } from '../../lib/audit';
+import { ianaTimezone } from '../../lib/timezone';
 
 // ---------------------------------------------------------------- validation
 
@@ -34,7 +35,7 @@ export const eventCreateSchema = z
     endAt: iso,
     // full creation extras
     description: z.string().default(''),
-    timezone: z.string().default(config.defaultTimezone),
+    timezone: ianaTimezone.default(config.defaultTimezone),
     eventType: z.enum(['in_person', 'online', 'hybrid']).default('in_person'),
     venueId: z.string().uuid().nullable().optional(),
     externalLocation: z.string().nullable().optional(),
