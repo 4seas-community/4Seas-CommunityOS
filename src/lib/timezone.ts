@@ -4,10 +4,18 @@
  */
 import { z } from 'zod';
 import { config } from './config';
-import { isValidTimezone } from './time';
+import { canonicalTimezone, isValidTimezone } from './time';
 
-/** Write-side: only IANA names Intl recognises. */
-export const ianaTimezone = z.string().min(1).max(64).refine(isValidTimezone, 'Invalid IANA timezone');
+/**
+ * Write-side: only IANA names Intl recognises, stored in canonical spelling.
+ * `abort` stops at the length check so oversized input never reaches Intl.
+ */
+export const ianaTimezone = z
+  .string()
+  .min(1)
+  .max(64, { abort: true })
+  .refine(isValidTimezone, 'Invalid IANA timezone')
+  .transform((tz) => canonicalTimezone(tz)!);
 
 /** Read-side: a bad or missing stored value falls back to the community default. */
 export function safeTimezone(tz?: string | null): string {

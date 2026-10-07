@@ -169,3 +169,24 @@ describe('timezone rendering (read side)', () => {
     expect(html).toContain('08:00');
   });
 });
+
+describe('timezone canonicalisation (write side)', () => {
+  const base = { title: 't', startAt: '2026-10-07T03:00:00Z', endAt: '2026-10-07T04:00:00Z' };
+
+  it('stores the canonical spelling of case variants', () => {
+    expect(eventCreateSchema.parse({ ...base, timezone: 'asia/bangkok' }).timezone).toBe('Asia/Bangkok');
+    expect(eventCreateSchema.parse({ ...base, timezone: 'EUROPE/LONDON' }).timezone).toBe('Europe/London');
+    expect(buildingUpdateSchema.parse({ timezone: 'europe/berlin' }).timezone).toBe('Europe/Berlin');
+  });
+
+  it('still applies the default when omitted', () => {
+    expect(eventCreateSchema.parse(base).timezone).toBe('Asia/Bangkok');
+  });
+
+  it('stops at the length check for oversized input', () => {
+    const r = eventCreateSchema.safeParse({ ...base, timezone: 'x'.repeat(65) });
+    expect(r.success).toBe(false);
+    const issues = r.error!.issues.filter((i) => i.path[0] === 'timezone');
+    expect(issues.map((i) => i.code)).toEqual(['too_big']);
+  });
+});

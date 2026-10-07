@@ -29,14 +29,22 @@ function partsFormatter(timezone: string): Intl.DateTimeFormat {
   return f;
 }
 
+/**
+ * Intl's canonical spelling of `timezone` ("asia/bangkok" -> "Asia/Bangkok"),
+ * or null when Intl doesn't recognise it. Deliberately bypasses the formatter
+ * cache: inputs here are untrusted, and case variants would each take a slot.
+ */
+export function canonicalTimezone(timezone: string): string | null {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: timezone }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
 /** True when Intl recognises `timezone` (formatting with an unknown zone throws RangeError). */
 export function isValidTimezone(timezone: string): boolean {
-  try {
-    partsFormatter(timezone);
-    return true;
-  } catch {
-    return false;
-  }
+  return canonicalTimezone(timezone) !== null;
 }
 
 /** Offset (ms) of timezone at the given instant: local-wall-time(UTC) - utc. */
