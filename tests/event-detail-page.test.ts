@@ -3,16 +3,29 @@
  *
  * The page used to read a flat event (ev.eventType, ev.tags, ...) while the
  * route returns getEvent()'s { event, venue, host, ... }; the type assertion in
- * apiGet hid it and every detail page threw while rendering. The fixture here is
- * produced by the service and JSON round-tripped, never hand-written.
+ * apiGet hid it and every detail page threw while rendering. The page is fed by
+ * the real GET /api/events/:id route, never a hand-written fixture.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as eventService from '../src/modules/event/service';
 import { seedCommunity, seedMember, seedVenue, sessionFor } from './helpers';
 
-const api = vi.hoisted(() => ({ response: null as unknown }));
-vi.mock('../src/lib/api-client', () => ({ apiGet: async () => api.response }));
+// apiGet goes through the real router, so the route's response body (not
+// getEvent()'s return value) is what the page renders.
+vi.mock('../src/lib/api-client', async () => {
+  const { Router } = await import('../src/lib/http');
+  const { registerEventRoutes } = await import('../src/modules/event/routes');
+  const router = new Router();
+  registerEventRoutes(router);
+  return {
+    apiGet: async (path: string) => {
+      const res = await router.handle(new Request('http://test.local' + path), path);
+      if (!res.ok) throw new Error('API ' + res.status + ' for ' + path);
+      return res.json();
+    },
+  };
+});
 // Client component needs the Next app router; irrelevant to what's under test.
 vi.mock('../src/components/forms', () => ({ RegisterButton: () => null }));
 
@@ -45,7 +58,6 @@ describe('event detail page', () => {
     await eventService.registerForEvent(event.id, (await seedMember('guest@test.dev')).id);
 
     const detail = await eventService.getEvent(event.id, session);
-    api.response = JSON.parse(JSON.stringify(detail));
 
     const element = await EventDetailPage({ params: Promise.resolve({ id: event.id }) });
     const html = renderToStaticMarkup(element);
@@ -56,5 +68,26 @@ describe('event detail page', () => {
     expect(html).toContain(venue.name);
     expect(html).toContain('1 going');
     expect(html).toContain('Hosted by ' + (detail.host?.displayName ?? ''));
+  });
+
+  it('labels a venue-less event with an empty external location as online/external', async () => {
+    const community = await seedCommunity();
+    await seedVenue(community.id);
+    const host = await seedMember('host2@test.dev');
+    const session = sessionFor(host.id, host.roles);
+    const { event } = await eventService.createEvent(
+      {
+        title: 'Remote Meetup',
+        startAt: new Date(Math.ceil(Date.now() / 86400000) * 86400000 + 3 * 3600000).toISOString(),
+        endAt: new Date(Math.ceil(Date.now() / 86400000) * 86400000 + 5 * 3600000).toISOString(),
+        eventType: 'online',
+        externalLocation: '',
+      },
+      session,
+    );
+    await eventService.publishEvent(event.id, session);
+
+    const html = renderToStaticMarkup(await EventDetailPage({ params: Promise.resolve({ id: event.id }) }));
+    expect(html).toContain('Online / external');
   });
 });

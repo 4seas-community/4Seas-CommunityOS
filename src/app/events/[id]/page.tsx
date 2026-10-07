@@ -64,7 +64,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           </div>
           <div className="row" style={{ marginTop: 10, gap: 8 }}>
             <span className="badge badge-brand">
-              {venue ? venue.name + (venue.buildingName ? ' · ' + venue.buildingName : '') : (ev.externalLocation ?? 'Online / external')}
+              {venue ? venue.name + (venue.buildingName ? ' · ' + venue.buildingName : '') : (ev.externalLocation || 'Online / external')}
             </span>
             <span className="badge">{ev.eventType.replace('_', ' ')}</span>
             {ev.isPaid !== 'free' && <span className="badge badge-accent">Paid · {ev.isPaid}</span>}

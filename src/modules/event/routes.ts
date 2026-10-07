@@ -52,6 +52,7 @@ export function registerEventRoutes(router: Router): void {
 
   router.get('/api/events/:id', async (_req, ctx) => {
     const detail = await service.getEvent(ctx.params.id, ctx.session);
+    // Returned unwrapped: app/events/[id]/page.tsx types its response as getEvent()'s.
     return json(detail);
   });
 
