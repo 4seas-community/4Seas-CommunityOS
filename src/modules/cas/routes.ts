@@ -12,11 +12,12 @@ import { readJson } from '../../lib/http';
 import { z } from 'zod';
 import * as people from '../people/service';
 import { casClient } from './index';
+import { ianaTimezone } from '../../lib/timezone';
 
 const patchSchema = z.object({
   displayName: z.string().min(1).max(120).optional(),
   avatarUrl: z.string().url().optional(),
-  timezone: z.string().min(1).max(64).optional(),
+  timezone: ianaTimezone.optional(),
   bio: z.string().max(2000).optional(),
 });
 
