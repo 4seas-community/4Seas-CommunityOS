@@ -10,12 +10,11 @@ import { readJson } from '../../lib/http';
 import { z } from 'zod';
 import * as auth from './service';
 import * as people from '../people/service';
-import { ianaTimezone } from '../../lib/timezone';
 
 const registerSchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(1).max(120).optional(),
-  timezone: ianaTimezone.optional(),
+  timezone: z.string().min(1).max(64).optional(),
 });
 
 const verifyEmailSchema = z.object({ token: z.string().min(10) });
